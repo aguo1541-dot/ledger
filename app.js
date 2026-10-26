@@ -1,4 +1,4 @@
-window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-26T03:39:28.710Z' };
+window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-26T06:29:49.509Z' };
 
 (function (root, factory) {
 var api = factory();
@@ -903,7 +903,9 @@ VIEWS: {
 owner: { label: '사장님용', nav: ['pnl', 'debts', 'sup'], home: 'pnl', shared: true, staleNote: false, quietNotes: true, supPlain: true, supHide: ['bethel'], reasons: false, notes: false, multiPeriod: false, details: false, drill: false,
 terms: { debts: '부채', debtsTotal: '부채 합계', debtsAll: '부채 전체', payPerMonth: '한 달에 갚을 금액' },
 debtTable: { kids: false, source: false, unknownNote: false, hideEmpty: ['loan', 'etc'], payoff: false },
-subShare: true, debtChart: { cols: ['nain', 'taejo', 'hyunjin'] }, plain: true, flowPop: false, plainFlow: true, kpis: ['revenue', 'op_profit', 'op_margin'], kpiLabels: { revenue: '입금' }, flowBarsOnly: true },
+subShare: true, debtChart: { cols: ['nain', 'taejo', 'hyunjin'] }, plain: true, flowPop: false, plainFlow: true, kpis: ['revenue', 'op_profit', 'op_margin'], kpiLabels: { revenue: '입금' }, flowBarsOnly: true,
+supChart: true, supSwipe: true, stamp: 'stmt',
+pnlTable: { revShare: false, slimLabel: true, labels: { rent_fixed: '고정비', delivery_fees: '배달', op_cost: '비용 합계' } } },
 admin: { label: '관리용', nav: ['overview', 'debts', 'sup', 'price', 'pnl', 'util', 'review', 'data'], home: 'overview', reasons: true, notes: true, multiPeriod: true, details: true, drill: true, bankToggle: true,
 terms: {}, debtTable: { kids: true, source: true, unknownNote: true, hideEmpty: [] }, debtChart: { cols: ['nain', 'taejo', 'hyunjin'] }, inbox: true, taxPays: true,
 reviewTodo: true }
@@ -1179,6 +1181,20 @@ schema: '이 앱이 모르는 새 장부 자료예요. 앱을 닫았다가 다�
 invalid: '장부 자료 점검에서 오류 {n}개가 나와 읽지 않았어요. 다음 갱신 때 다시 받아요.',
 tooBig: '장부 자료 파일이 너무 커요.'
 }
+},
+lock: {
+rpName: '가게 장부', userName: '장부 잠금',
+title: '지문 잠금', desc: '이 기기에서 앱을 열 때 지문(또는 얼굴)으로 열어요. 1분 넘게 다른 앱에 있다가 돌아와도 다시 잠가요.',
+name: '지문 잠금', onDesc: '켜져 있어요. 앱을 열 때마다 지문(또는 얼굴)으로 열어요.', offDesc: '꺼져 있어요. 켜면 이 기기의 지문(또는 얼굴)을 한 번 등록해요.',
+checking: '이 기기에서 쓸 수 있는지 확인하고 있어요…',
+na: '이 기기(브라우저)에서는 지문 잠금을 쓸 수 없어요.', naOn: '이 기기에서 지문을 더는 쓸 수 없어요. 잠금을 꺼 주세요.', turnOff: '잠금 끄기',
+registering: '지문을 등록하고 있어요…', onDone: '지문 잠금을 켰어요.', offDone: '지문 잠금을 껐어요.',
+enableErr: { cancelled: '지문 등록을 마치지 않았어요. 다시 켜 주세요.', failed: '지문을 등록하지 못했어요. 잠시 뒤 다시 해 주세요.', unsupported: '이 기기에서는 지문 잠금을 쓸 수 없어요.' },
+lockedTitle: '장부가 잠겨 있어요', lockedBody: '지문(또는 얼굴)으로 열어 주세요.',
+unlock: '지문으로 열기', unlocking: '확인하고 있어요…', retry: '다시 해 보기',
+unlockErr: '잠금을 풀지 못했어요. 다시 해 보시고, 그래도 안 되면 다시 로그인해 주세요.',
+unsupported: '이 기기에서 지문을 쓸 수 없게 됐어요. 다시 로그인하면 잠금이 꺼져요.',
+relogin: '다시 로그인', reloginNote: '다시 로그인하면 지문 잠금이 꺼지고, 이 기기에 남은 장부 자료와 공유 링크도 지워요. OneDrive 파일은 그대로예요.'
 }
 };
 L.josa = function (word, pair) {
@@ -2404,6 +2420,7 @@ else if (k === 'p') q.set('place', v);
 else if (k === 'b') q.set('basis', v);
 else if (k === 'g') q.set('sup', v);
 else if (k === 'd') q.set('day', v);
+else if (k === 'c') q.set('chart', v);
 });
 if (SCREENS.indexOf(screen) < 0) return routeOf('/' + head, q);
 return routeOf('/' + screen + (arg && screen === 'debts' ? '/' + arg : ''), q);
@@ -2428,6 +2445,7 @@ add('p', get('place'));
 add('b', get('basis'));
 add('g', get('sup'));
 add('d', get('day'));
+add('c', get('chart'));
 return '#' + out;
 }
 function isAnnual(m) { return m != null && m !== '' && /^0+$/.test(String(m)); }
@@ -3045,8 +3063,41 @@ s.setAttribute('aria-label', ariaLabel || items.map((it) => (it.tip || (it.lines
 };
 draw(); watch(el, draw); settle(draw);
 }
+function pairBars(el, { labels, tickLabels = null, series, shared = true, format = fmt.int, tickFormat = null, height = 240, xAt = null, hi = null, ariaLabel = null }) {
+el._fmt = format;
+const draw = () => {
+const { s, w, h } = frame(el, heightOf(height));
+const tick = tickFormat || format, ink = css(el, '--axis-ink', '#6b6b6b'), neg = css(el, '--negative', '#c4242a');
+const nums = (sr) => sr.values.filter((v) => v != null && Number.isFinite(v));
+const scale = (list) => { const lo = Math.min(0, ...list), top = Math.max(0, ...list); return ticks(lo, top > lo ? top : lo + 1, 3); };
+const yts = shared ? [scale(series.flatMap(nums))] : series.map((sr) => scale(nums(sr)));
+if (shared) yts[1] = yts[0];
+const capH = 22, gapH = 12, padB = 26, ph = Math.max(40, (h - padB - capH * 2 - gapH) / 2), tops = [capH, capH * 2 + ph + gapH];
+const padL = 12 + Math.max(...yts.flat().map((v) => measure(s, tick(v), 12)));
+const n = labels.length, band = (w - padL) / Math.max(1, n), bw = Math.max(2, Math.min(band * 0.62, 40));
+const x = (i) => padL + band * i + band / 2;
+const g = svg('g', {}, s);
+if (hi != null && hi >= 0 && hi < n) svg('rect', { x: x(hi) - band / 2, y: tops[0], width: band, height: tops[1] + ph - tops[0], fill: css(el, '--sel-col', '#eef3fb') }, g);
+series.forEach((sr, k) => {
+const yt = yts[k], y = (v) => tops[k] + ph * (1 - (v - yt[0]) / (yt.at(-1) - yt[0]));
+const col = css(el, sr.tone || (k ? '--chart-1' : '--chart-2'), k ? '#2f6fdf' : '#8a8a8a');
+axes(g, el, { w, h, padL, padB, yt, y, labels: k === series.length - 1 ? tickLabels || labels : [], x, band: true, at: xAt, tick, boldAt: hi });
+sr.values.forEach((v, i) => {
+if (v == null || !Number.isFinite(v)) return;
+const y0 = y(0), y1 = y(v);
+if (Math.abs(y1 - y0) < 0.5) return;
+titled(svg('rect', { x: x(i) - bw / 2, y: Math.min(y0, y1), width: bw, height: Math.max(1, Math.abs(y1 - y0)), fill: v < 0 ? neg : col, 'shape-rendering': 'crispEdges' }, g), `${labels[i]} ${sr.name} ${format(v)}`);
+});
+svg('line', { x1: padL, x2: w, y1: y(0), y2: y(0), stroke: ink, 'stroke-width': 1, opacity: 0.8, 'shape-rendering': 'crispEdges' }, g);
+svg('rect', { x: padL, y: tops[k] - 16, width: 10, height: 10, rx: 2, fill: col }, g);
+text(g, sr.name, { x: padL + 15, y: tops[k] - 7, 'font-size': 12, 'font-weight': 600, fill: css(el, '--ink', '#111') });
+});
+s.setAttribute('aria-label', ariaLabel || `${series.map((sr) => sr.name).join(' · ')}, ${labels[0]} – ${labels.at(-1)}`);
+};
+draw(); watch(el, draw); settle(draw);
+}
 function watch(el, draw) { if (!('ResizeObserver' in window)) return; let w = el.clientWidth; new ResizeObserver(() => { if (Math.abs(el.clientWidth - w) > 4) { w = el.clientWidth; draw(); } }).observe(el); }
-window.Charts = { line, diverging, ticks, fmt, columns, stackLine, stack100, stackStyles, track, trackStyles, trackLegend, legendEl, placeValueLabels, flowBars };
+window.Charts = { line, diverging, ticks, fmt, columns, stackLine, stack100, stackStyles, track, trackStyles, trackLegend, legendEl, placeValueLabels, flowBars, pairBars };
 })();
 (function (root) {
 var L = root.Ledger = root.Ledger || {};
@@ -3699,6 +3750,129 @@ return a;
 L.adapters.graph = { kind: 'graph', create: create, _test: { pickLink: pickLink, shareToken: shareToken, cfg: cfg } };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 (function (root) {
+'use strict';
+var L = root.Ledger = root.Ledger || {};
+var KEY = 'ledger.lock.id', AWAY_MS = 60000, BEAT_MS = 10000;
+var now = function () { return Date.now(); };
+var st = { started: false, locked: false, hiddenAt: null, beatAt: 0, support: null, supportP: null, subs: [] };
+function K() { return (L.copy && L.copy.lock) || {}; }
+function err(code, cause) { var e = new Error(code); e.code = code; if (cause) e.cause = cause; return e; }
+function codeOf(e) {
+var n = e && e.name;
+return n === 'NotAllowedError' || n === 'AbortError' ? 'cancelled' : n === 'NotSupportedError' || n === 'SecurityError' ? 'unsupported' : 'failed';
+}
+function box() { try { return root.localStorage || null; } catch (e) { return null; } }
+function storedId() { var s = box(); try { var v = s ? s.getItem(KEY) : null; return v && /^[A-Za-z0-9_-]{8,1400}$/.test(v) ? v : null; } catch (e) { return null; } }
+function setId(v) { var s = box(); try { if (s) { if (v) s.setItem(KEY, v); else s.removeItem(KEY); } } catch (e) { } }
+function bytes(b) {
+if (!b) return new Uint8Array(0);
+if (b.BYTES_PER_ELEMENT === 1 && b.length != null) return b;
+if (b.buffer && b.byteLength != null) return new Uint8Array(b.buffer, b.byteOffset || 0, b.byteLength);
+return new Uint8Array(b);
+}
+function b64u(b) { var u = bytes(b), s = ''; for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return root.btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function unb64u(str) {
+var s = String(str).replace(/-/g, '+').replace(/_/g, '/');
+while (s.length % 4) s += '=';
+var bin = root.atob(s), u = new Uint8Array(bin.length);
+for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+return u;
+}
+function rand(n) { var u = new Uint8Array(n); root.crypto.getRandomValues(u); return u; }
+function utf8(b) { return new root.TextDecoder().decode(bytes(b)); }
+function webauthn() {
+var P = root.PublicKeyCredential, n = root.navigator, c = n && n.credentials;
+return P && c && typeof c.create === 'function' && typeof c.get === 'function' ? { P: P, c: c } : null;
+}
+function checkSupport() {
+if (st.supportP) return st.supportP;
+var a = webauthn();
+if (!a || root.isSecureContext === false || typeof a.P.isUserVerifyingPlatformAuthenticatorAvailable !== 'function') {
+st.support = 'no'; st.supportP = Promise.resolve('no');
+return st.supportP;
+}
+st.supportP = Promise.resolve().then(function () { return a.P.isUserVerifyingPlatformAuthenticatorAvailable(); })
+.then(function (ok) { return ok ? 'yes' : 'no'; }, function () { return 'no'; })
+.then(function (v) { st.support = v; fire('support'); return v; });
+return st.supportP;
+}
+function enable() {
+var a = webauthn(), k = K(), p;
+if (!a) return Promise.reject(err('unsupported'));
+try {
+p = a.c.create({ publicKey: {
+challenge: rand(32),
+rp: { name: k.rpName || '가게 장부' },
+user: { id: rand(16), name: k.userName || '장부 잠금', displayName: k.userName || '장부 잠금' },
+pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged', requireResidentKey: false },
+timeout: 60000, attestation: 'none'
+} });
+} catch (e) { return Promise.reject(err(codeOf(e), e)); }
+return Promise.resolve(p).then(function (cred) {
+if (!cred || !cred.rawId || !bytes(cred.rawId).length) throw err('failed');
+setId(b64u(cred.rawId));
+st.locked = false; st.beatAt = now();
+return { ok: true };
+}, function (e) { throw err(codeOf(e), e); });
+}
+function disable() { setId(null); st.locked = false; }
+function assertionOk(cred, ch) {
+try {
+var r = cred.response || {}, ad = bytes(r.authenticatorData), origin = root.location && root.location.origin;
+if (ad.length < 37 || !(ad[32] & 0x04)) return false;
+var cd = JSON.parse(utf8(r.clientDataJSON));
+return cd.type === 'webauthn.get' && cd.challenge === b64u(ch) && (!origin || !cd.origin || cd.origin === origin);
+} catch (e) { return false; }
+}
+function unlock() {
+var id = storedId(), a = webauthn(), ch, p;
+if (!id) { st.locked = false; fire('lock'); return Promise.resolve({ ok: true }); }
+if (!a) return Promise.reject(err('unsupported'));
+try {
+ch = rand(32);
+p = a.c.get({ publicKey: { challenge: ch, allowCredentials: [{ type: 'public-key', id: unb64u(id), transports: ['internal'] }], userVerification: 'required', timeout: 60000 } });
+} catch (e) { return Promise.reject(err(codeOf(e), e)); }
+return Promise.resolve(p).then(function (cred) {
+if (!cred || !cred.rawId || b64u(cred.rawId) !== id || !assertionOk(cred, ch)) throw err('failed');
+st.locked = false; st.hiddenAt = null; st.beatAt = now();
+fire('lock');
+return { ok: true };
+}, function (e) { throw err(codeOf(e), e); });
+}
+function fire(why) { st.subs.slice().forEach(function (fn) { try { fn(why); } catch (e) { if (root.console) root.console.error(e); } }); }
+function away(ms) { if (!st.locked && storedId() && ms > AWAY_MS) { st.locked = true; fire('lock'); } }
+function back() { if (st.hiddenAt == null) return; var ms = now() - st.hiddenAt; st.hiddenAt = null; st.beatAt = now(); away(ms); }
+function onVisibility() { var d = root.document; if (d && d.visibilityState === 'hidden') { if (st.hiddenAt == null) st.hiddenAt = now(); } else back(); }
+function onPageHide() { if (st.hiddenAt == null) st.hiddenAt = now(); }
+function beat() {
+var t = now(), gap = t - st.beatAt, d = root.document;
+st.beatAt = t;
+if (d && d.visibilityState === 'hidden') return;
+if (gap > AWAY_MS + BEAT_MS) away(gap);
+}
+function start(onChange) {
+if (typeof onChange === 'function' && st.subs.indexOf(onChange) < 0) st.subs.push(onChange);
+if (st.started) return;
+st.started = true;
+st.locked = !!storedId();
+st.beatAt = now();
+var d = root.document;
+if (d && d.visibilityState === 'hidden') st.hiddenAt = now();
+if (d && d.addEventListener) d.addEventListener('visibilitychange', onVisibility);
+if (root.addEventListener) { root.addEventListener('pagehide', onPageHide); root.addEventListener('pageshow', back); }
+if (root.setInterval) root.setInterval(beat, BEAT_MS);
+checkSupport();
+}
+L.lock = {
+start: start, checkSupport: checkSupport, enable: enable, disable: disable, unlock: unlock,
+isOn: function () { return !!storedId(); },
+locked: function () { return st.started && st.locked && !!storedId(); },
+support: function () { return st.support; },
+_test: { b64u: b64u, unb64u: unb64u, beat: beat, KEY: KEY, AWAY_MS: AWAY_MS, clock: function (fn) { now = fn || function () { return Date.now(); }; } }
+};
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+(function (root) {
 var L = root.Ledger = root.Ledger || {};
 var U = L.ui, F = L.fmt;
 L.screens = L.screens || {};
@@ -4191,7 +4365,7 @@ return '<div class="table-wrap"><table class="debt-table"><caption class="sr-onl
 function headline(ctx) {
 if (ctx.V && ctx.V.plain) {
 var M2 = ctx.M, now2 = M2.debtNow(), ref2 = Number(String(M2.today).slice(0, 4));
-return '지금 ' + U.esc(termOf(ctx, 'debtsTotal')) + ' ' + ctx.num(now2.total, 'man') + ' 남았어요 <span class="muted">(세금 포함 · ' + U.esc(F.date(now2.asOf || M2.asOf, { refYear: ref2 })) + ' 기준' + U.esc(excludedNote(M2)) + ')</span>';
+return '지금 ' + U.esc(termOf(ctx, 'debtsTotal')) + ' ' + ctx.num(now2.total, 'man', { cls: 'head-amt' }) + ' 남았어요 <span class="muted">(세금 포함 · ' + U.esc(F.date(now2.asOf || M2.asOf, { refYear: ref2 })) + ' 기준' + U.esc(excludedNote(M2)) + ')</span>';
 }
 var M = ctx.M, now = M.debtNow(), ref = Number(String(M.today).slice(0, 4)), T = L.screens._debtText, ch = now.change.value, since = T.since(M, now.prevMonth);
 return '지금 ' + ctx.num(now.total, 'man') + ' 남았어요' +
@@ -4593,43 +4767,46 @@ var its = shownItems(ctx, line).filter(function (it) { return F.isNum(it.amount.
 return its.length ? { value: its.reduce(function (a, it) { return a + it.amount.value; }, 0), v: its.map(function (it) { return '(' + it.amount.v + ')'; }).join(' + ') } : line.total;
 }
 function itemCell(ctx, it, hide) { return hide && it.personal ? '<span class="muted">가려 둠</span>' : ctx.num(it.amount, 'digits'); }
+function tcfg(ctx) { return (ctx.V && ctx.V.pnlTable) || {}; }
+function rowLabel(ctx, id) { var o = tcfg(ctx).labels; return (o && o[id]) || ctx.M.label(id); }
 function yearTable(ctx, T, selIdx) {
-var label = function (id) { return ctx.M.label(id); }, hide = ctx.prefs.hidePersonal;
+var label = function (id) { return rowLabel(ctx, id); }, hide = ctx.prefs.hidePersonal, share = tcfg(ctx).revShare !== false;
+var pctCell = function (html) { return share ? '<td class="n">' + html + '</td>' : ''; };
 var colNames = T.groups ? T.groups.map(function (g) { return g.label; }) : T.months.map(function (m, i) { return (i + 1) + '월'; }), ncol = colNames.length;
 var pick = T.groups ? null : T.months.map(function (m, i) { return T.hasData && T.hasData[i] ? m : null; });
 var head = '<thead><tr><th scope="col">항목</th>' + colNames.map(function (c, i) {
 return '<th class="n' + (i === selIdx ? ' sel' : '') + '" scope="col">' + (pick && pick[i] ? '<button type="button" class="month-pick" data-pick-month="' + pick[i] + '" aria-pressed="' + (i === selIdx) + '" title="' + U.esc(c) + ' 보기">' + U.esc(c) + '</button>' : U.esc(c)) + '</th>';
-}).join('') + '<th class="n" scope="col">합계</th><th class="n" scope="col">매출 대비</th></tr></thead>';
+}).join('') + '<th class="n" scope="col">합계</th>' + (share ? '<th class="n" scope="col">매출 대비</th>' : '') + '</tr></thead>';
 var row = function (line, opts) {
 opts = opts || {};
 var tx = txOn(ctx, line.id);
 var name = opts.toggle ? (tx ? '<button type="button" class="toggle caret" data-toggle="' + line.id + '" aria-expanded="' + !!expanded[line.id] + '" aria-label="' + U.esc(label(line.id)) + ' 항목 펼치기"></button>' + txBtn(ctx, line.id, label(line.id))
 : '<button type="button" class="toggle" data-toggle="' + line.id + '" aria-expanded="' + !!expanded[line.id] + '">' + U.esc(label(line.id)) + '</button>') : tx ? txBtn(ctx, line.id, label(line.id)) : U.esc(label(line.id));
-return '<tr class="' + (opts.cls || '') + '"><th scope="row">' + name + '</th>' + cells(ctx, line, null, selIdx, pick, line.id === 'food' && !T.groups ? foodMarks(ctx, T.months) : null) + '<td class="n">' + ctx.num(line.total, 'digits', { tone: line.id === 'op_profit' && line.total.value < 0 ? 'bad' : '' }) + '</td><td class="n">' + ctx.num(line.pct, 'pct') + '</td></tr>';
+return '<tr class="' + (opts.cls || '') + '"><th scope="row">' + name + '</th>' + cells(ctx, line, null, selIdx, pick, line.id === 'food' && !T.groups ? foodMarks(ctx, T.months) : null) + '<td class="n">' + ctx.num(line.total, 'digits', { tone: line.id === 'op_profit' && line.total.value < 0 ? 'bad' : '' }) + '</td>' + pctCell(ctx.num(line.pct, 'pct')) + '</tr>';
 };
 var sub = subOn(ctx), parentOf = { revenue: T.revenue };
 var kids = function (parent, list) { return list.map(function (k) {
 var whole = parentOf[parent];
 var mcells = sub && whole ? k.cells.map(function (c, i) { return '<td class="n sh-cell' + (i === selIdx ? ' sel' : '') + '">' + shareHtml(ctx, c, whole.cells[i]) + '</td>'; }).join('') : cells(ctx, k, null, selIdx);
 var tcell = sub && whole ? '<td class="n sh-cell">' + shareHtml(ctx, k.total, whole.total) + '</td>' : '<td class="n">' + ctx.num(k.total, 'digits') + '</td>';
-return '<tr class="item" data-parent="' + parent + '"' + (expanded[parent] ? '' : ' hidden') + '><th scope="row">' + U.esc(label(k.id)) + '</th>' + mcells + tcell + '<td class="n">' + ctx.num(k.pct, 'pct') + '</td></tr>'; }).join(''); };
+return '<tr class="item" data-parent="' + parent + '"' + (expanded[parent] ? '' : ' hidden') + '><th scope="row">' + U.esc(label(k.id)) + '</th>' + mcells + tcell + pctCell(ctx.num(k.pct, 'pct')) + '</tr>'; }).join(''); };
 var items = function (line) {
 var tot = line.total.value || 0;
 return shownItems(ctx, line).map(function (it) {
 var masked = hide && it.personal;
 var name = U.esc(it.label) + (it.moved && it.from.length && it.from.join('') !== it.label ? '<span class="sub">' + U.esc(it.from.join(' · ')) + '</span>' : '');
 return '<tr class="item' + (it.moved ? ' moved' : '') + '" data-parent="' + line.id + '"' + (expanded[line.id] ? '' : ' hidden') + '><th scope="row">' + name + '</th><td colspan="' + ncol + '">' + (masked ? '' : '<span class="share" data-w="' + (tot ? (it.amount.value / tot) * 100 : 0).toFixed(1) + '"></span><span class="sr-only">' + U.esc(label(line.id)) + ' 안에서 ' + F.pct(tot ? it.amount.value / tot : null) + '</span>') + '</td>' +
-(sub && !masked ? '<td class="n sh-cell">' + shareHtml(ctx, it.amount, wholeOf(ctx, line)) + '</td>' : '<td class="n">' + itemCell(ctx, it, hide) + '</td>') + '<td class="n">' + (masked ? '' : ctx.num(it.pct, 'pct')) + '</td></tr>';
+(sub && !masked ? '<td class="n sh-cell">' + shareHtml(ctx, it.amount, wholeOf(ctx, line)) + '</td>' : '<td class="n">' + itemCell(ctx, it, hide) + '</td>') + pctCell(masked ? '' : ctx.num(it.pct, 'pct')) + '</tr>';
 }).join('');
 };
 var body = row(T.revenue, { toggle: true, cls: 'total' }) + kids('revenue', T.revenue.children) + row(T.other) +
 T.costs.map(function (c) { return row(c, { toggle: shownItems(ctx, c).length > 0 }) + items(c); }).join('') +
 row(T.opCost, { cls: 'total' }) + row(T.profit, { cls: 'total' }) +
-'<tr><th scope="row">이익률</th>' + cells(ctx, T.margin, 'pct', selIdx, pick) + '<td class="n">' + ctx.num(T.margin.total, 'pct') + '</td><td class="n"><span class="dash">' + F.DASH + '</span></td></tr>';
-return '<div class="pnl-wrap table-wrap"><table class="pnl-table' + (T.groups ? ' period' : '') + (sub ? ' sum-sticky' : '') + '"><caption class="sr-only">' + (T.groups ? U.esc(periodLabel(ctx)) + ' 손익(원)' : T.year + '년 월별 손익(원)') + '</caption>' + head + '<tbody>' + body + '</tbody></table></div>';
+'<tr><th scope="row">이익률</th>' + cells(ctx, T.margin, 'pct', selIdx, pick) + '<td class="n">' + ctx.num(T.margin.total, 'pct') + '</td>' + pctCell('<span class="dash">' + F.DASH + '</span>') + '</tr>';
+return '<div class="pnl-wrap table-wrap"><table class="pnl-table' + (T.groups ? ' period' : '') + (sub ? ' sum-sticky' : '') + (share ? '' : ' no-share') + (tcfg(ctx).slimLabel ? ' slim-label' : '') + '"><caption class="sr-only">' + (T.groups ? U.esc(periodLabel(ctx)) + ' 손익(원)' : T.year + '년 월별 손익(원)') + '</caption>' + head + '<tbody>' + body + '</tbody></table></div>';
 }
 function monthRows(ctx, T) {
-var f = ctx.f, M = ctx.M, s = f.store, label = function (id) { return M.label(id); }, sub = subOn(ctx), hide = ctx.prefs.hidePersonal;
+var f = ctx.f, M = ctx.M, s = f.store, label = function (id) { return rowLabel(ctx, id); }, sub = subOn(ctx), hide = ctx.prefs.hidePersonal;
 var lines = [T.revenue, T.other].concat(T.costs, [T.opCost, T.profit]);
 var i = T.months.indexOf(f.month), all = whole(ctx);
 var revOf = all ? T.revenue.total : T.revenue.cells[i];
@@ -5626,6 +5803,93 @@ function monthBuy(mo, pl) {
 if (!pl || !isNum(mo.adj.value) || !mo.adj.value) return mo.buy;
 return { value: (isNum(mo.buy.value) ? mo.buy.value : 0) + mo.adj.value, v: [mo.buy.v, mo.adj.v].filter(Boolean).join(' + ') };
 }
+function chartOn(ctx) { return !!(ctx.V && ctx.V.supChart); }
+function yearly(ctx) { return ctx.route.params.get('chart') === 'y'; }
+var SWIPE = { min: 48, ratio: 1.5 };
+function swipeDir(dx, dy, opts) {
+var o = opts || {}, min = isNum(o.min) ? o.min : SWIPE.min, ratio = isNum(o.ratio) ? o.ratio : SWIPE.ratio;
+if (!isNum(dx) || !isNum(dy)) return 0;
+if (Math.abs(dx) < min || Math.abs(dx) <= ratio * Math.abs(dy)) return 0;
+return dx < 0 ? 1 : -1;
+}
+function stepMonth(s, dir) { var i = s.months.indexOf(s.month), j = i + dir; return dir && i >= 0 && j >= 0 && j < s.months.length ? s.months[j] : null; }
+function flowData(ctx, s) {
+var pl = plain(ctx), out = [], k, m, mo;
+if (yearly(ctx)) {
+var y = s.month.slice(0, 4);
+for (k = 1; k <= 12; k++) {
+m = y + '-' + pad2(k); mo = s.months.indexOf(m) >= 0 ? ctx.M.supMonth(s.id, m) : null;
+out.push({ key: m, label: F.month(m, { year: true }), tick: k + '월', buy: mo ? monthBuy(mo, pl) : null, paid: mo && mo.nPaid ? mo.paid : null, has: !!mo });
+}
+return out;
+}
+var byDay = {};
+s.mo.rows.forEach(function (r) { byDay[Number(r.date.slice(8, 10))] = r; });
+for (k = 1; k <= daysIn(s.month); k++) {
+var r = byDay[k], date = s.month + '-' + pad2(k), base = 'supDaily[' + s.id + '/' + date + '].';
+out.push({ key: date, label: F.date(date, { refYear: 0 }) + ' (' + WEEK[dow(date)] + ')', tick: k + '일', buy: r ? dayBuy(r, base, pl) : null,
+paid: r && isNum(r.paid) && r.paid ? { value: r.paid, v: base + 'paid' } : null, has: !!r });
+}
+return out;
+}
+function yearSum(ctx, s, y, f) {
+var vals = ctx.M.supDays(s.id).filter(function (r) { return r.date.slice(0, 4) === y && isNum(r[f]); }).map(function (r) { return r[f]; });
+return vals.length ? { value: vals.reduce(function (a, b) { return a + b; }, 0), v: 'sum(supDaily[' + s.id + '/' + y + '-*].' + f + ')' } : { value: null, v: null };
+}
+function flowSums(ctx, s, ref) {
+if (!yearly(ctx)) return { period: F.month(s.month, { refYear: ref }), buy: monthBuy(s.mo, plain(ctx)), paid: s.mo.nPaid ? s.mo.paid : null };
+var y = s.month.slice(0, 4), paid = yearSum(ctx, s, y, 'paid');
+return { period: y + '년', buy: monthBuy({ buy: yearSum(ctx, s, y, 'buy'), adj: yearSum(ctx, s, y, 'adj') }, plain(ctx)), paid: isNum(paid.value) && paid.value ? paid : null };
+}
+function some(x) { return !!(x && isNum(x.value) && x.value); }
+function sameScale(data) {
+var top = function (f) { return data.reduce(function (a, d) { return d[f] && isNum(d[f].value) ? Math.max(a, d[f].value) : a; }, 0); };
+var a = top('buy'), b = top('paid');
+return !(a > 0 && b > 0) || Math.max(a, b) <= 3 * Math.min(a, b);
+}
+function flowHi(ctx, s) { return yearly(ctx) ? Number(s.month.slice(5)) - 1 : s.sel ? Number(s.sel.date.slice(8, 10)) - 1 : null; }
+function flowPanel(ctx, s, ref) {
+var yr = yearly(ctx), data = flowData(ctx, s), sums = flowSums(ctx, s, ref);
+var amt = function (x) { return some(x) ? ctx.num(x, 'man') : '<span class="muted">없어요</span>'; };
+var cell = function (x) { return some(x) ? ctx.num(x, 'digits') : '<span class="dash">' + F.DASH + '</span>'; };
+var seg = '<span class="segmented sup-span" role="group" aria-label="그래프 기간">' + [['m', '월간'], ['y', '연간']].map(function (it) {
+return '<button type="button" data-sup-span="' + it[0] + '" aria-pressed="' + ((it[0] === 'y') === yr) + '">' + it[1] + '</button>';
+}).join('') + '</span>';
+var rows = data.filter(function (d) { return d.has; }).map(function (d) { return [U.esc(yr ? F.month(d.key, { refYear: ref }) : d.label), cell(d.buy), cell(d.paid)]; });
+var notes = (sameScale(data) ? '' : '매입과 입금은 크기가 많이 달라서 눈금을 따로 그렸어요(왼쪽 숫자를 봐 주세요).') +
+(data.some(function (d) { return (d.buy && d.buy.value < 0) || (d.paid && d.paid.value < 0); }) ? ' 빨간 막대는 빼는 금액(보정·돌려받은 돈)이에요.' : '');
+var body = '<p class="chart-lead sup-flow-lead"><b>' + U.esc(sums.period) + '</b> 매입 ' + amt(sums.buy) + ' · 입금 ' + amt(sums.paid) + '</p>' + _.chartBox('sup-flow', 240) +
+(notes ? '<p class="note">' + U.esc(notes.trim()) + '</p>' : '') +
+U.asTable(NAME(ctx, s.id) + ' ' + sums.period + (yr ? ' 달마다' : ' 날마다') + ' 매입과 입금', [yr ? '달' : '날', '매입(원)', '입금(원)'], rows);
+return _.panel('c4 sup-flow', '매입과 입금', '', body, null, { keep: 'sup-flow', link: seg });
+}
+function drawFlow(el, ctx, s) {
+var yr = yearly(ctx), data = flowData(ctx, s), sums = flowSums(ctx, s, 0), hi = flowHi(ctx, s);
+var val = function (x) { return x && isNum(x.value) ? x.value : null; }, say = function (x) { return some(x) ? F.man(x.value) : '없음'; };
+var at = data.map(function (d, i) { return i; }).filter(function (i) { return yr ? hi == null || (i - hi) % 2 === 0 : i === 0 || (i + 1) % 5 === 0; });
+if (!yr && hi != null) at = at.filter(function (i) { return Math.abs(i - hi) > 2; }).concat([hi]).sort(function (a, b) { return a - b; });
+window.Charts.pairBars(el, {
+labels: data.map(function (d) { return d.label; }), tickLabels: data.map(function (d) { return d.tick; }),
+series: [{ name: '매입', values: data.map(function (d) { return val(d.buy); }), tone: '--chart-2' }, { name: '입금', values: data.map(function (d) { return val(d.paid); }), tone: '--chart-1' }],
+shared: sameScale(data), format: F.man, tickFormat: F.tick, height: 240, xAt: at, hi: hi,
+ariaLabel: NAME(ctx, s.id) + ' ' + sums.period + (yr ? ' 달마다' : ' 날마다') + ' 매입(위 칸)과 입금(아래 칸) 막대. 매입 ' + say(sums.buy) + ', 입금 ' + say(sums.paid) + '.'
+});
+}
+function swipeOn(cal, ctx, s) {
+var t0 = null;
+cal.addEventListener('touchstart', function (e) { var t = e.touches && e.touches.length === 1 ? e.touches[0] : null; t0 = t ? { x: t.clientX, y: t.clientY } : null; }, { passive: true });
+cal.addEventListener('touchcancel', function () { t0 = null; }, { passive: true });
+cal.addEventListener('touchend', function (e) {
+var a = t0, t = e.changedTouches && e.changedTouches[0];
+t0 = null;
+if (!a || !t || (e.touches && e.touches.length)) return;
+var dir = swipeDir(t.clientX - a.x, t.clientY - a.y), m = dir ? stepMonth(s, dir) : null;
+if (!m) return;
+if (e.cancelable) e.preventDefault();
+if (ctx.keep) ctx.keep(cal);
+go(ctx, { y: m.slice(0, 4), m: m.slice(5), day: null });
+}, { passive: false });
+}
 function state(ctx) {
 var hide = (ctx.V && ctx.V.supHide) || [], M = ctx.M, p = ctx.route.params, ids = (M.supIds ? M.supIds() : []).filter(function (id) { return hide.indexOf(id) < 0; });
 var id = ids.indexOf(p.get('sup')) >= 0 ? p.get('sup') : ids[0] || null;
@@ -5699,7 +5963,7 @@ cells += '<button type="button" class="' + cls + '" data-sup-day="' + d + '" ari
 (!pl && r.adj ? '<span class="cal-adj">+' + cellNum(ctx, r.adj, base + 'adj') + '</span>' : '') +
 (r.paid ? '<span class="cal-paid">입금 ' + cellNum(ctx, r.paid, base + 'paid') + '</span>' : '') + '</button>';
 }
-return '<div class="cal" role="group" aria-label="' + U.esc(F.month(m, { refYear: 0 })) + ' 달력">' +
+return '<div class="cal" role="group" aria-label="' + U.esc(F.month(m, { refYear: 0 })) + ' 달력"' + (ctx.V && ctx.V.supSwipe ? ' data-swipe="month"' : '') + '>' +
 WEEK.map(function (w, i) { return '<span class="cal-w' + (i === 0 ? ' sun' : '') + '" aria-hidden="true">' + w + '</span>'; }).join('') + cells + '</div>' +
 '<p class="cal-legend"><span class="lg buy">숫자 = 그날 청구(명세표)</span><span class="lg paid">파란 칸 = 입금한 날</span>' +
 (!pl && gaps.some(function (g) { return g.to >= m + '-01' && g.from < m + '-' + pad2(n); }) ? '<span class="lg gap">빗금 = 명세표 사진이 없는 날(+금액 = 앞뒤 잔액으로 구간 몫을 한 번에 넣은 날)</span>' : '') + '</p>';
@@ -5720,9 +5984,10 @@ var notes = [];
 if (!pl && r.src && SRC[r.src]) notes.push('청구 출처: ' + SRC[r.src]);
 if (!pl && r.flag && r.flag.indexOf('G') >= 0) notes.push('명세표 사진이 없는 기간이라 날마다 청구는 모르고, 앞뒤 잔액으로 구간 몫을 마지막 날에 한 번에 넣었어요');
 if (r.flag && r.flag.indexOf('U') >= 0) notes.push('이 날 입금은 아직 통장 자료(' + (ctx.M.supMeta && ctx.M.supMeta.bank_last ? F.date(ctx.M.supMeta.bank_last, { refYear: ref }) : '') + '까지)에 없어 명세표에 적힌 것이에요 — 통장이 들어오면 맞춰 봐요');
-var body = '<div class="rows sup-day">' + line(ctx.storeName('2ho') + ' 매입', 'b2') + line(ctx.storeName('eungam') + ' 매입', 'be') + (pl ? sumLine(s.id === 'nain' ? '공통 매입' : '매입(두 가게 함께)', ['bc', 'adj']) : line(s.id === 'nain' ? '공통 매입' : '매입(두 가게 함께)', 'bc')) +
-(pl ? '' : line('사진 없는 기간 몫', 'adj')) + line('입금', 'paid') +
-'<div class="row total"><span class="grow">그날 끝 남은 외상</span><span class="amt">' + ctx.num({ value: r.bal, v: base + 'bal' }, 'won') + '</span></div></div>' +
+var lines = line(ctx.storeName('2ho') + ' 매입', 'b2') + line(ctx.storeName('eungam') + ' 매입', 'be') + (pl ? sumLine(s.id === 'nain' ? '공통 매입' : '매입(두 가게 함께)', ['bc', 'adj']) : line(s.id === 'nain' ? '공통 매입' : '매입(두 가게 함께)', 'bc')) +
+(pl ? '' : line('사진 없는 기간 몫', 'adj')) + line('입금', 'paid');
+var body = (chartOn(ctx) ? (lines ? '<div class="rows sup-day">' + lines + '</div>' : U.emptyBlock('이 날은 매입·입금이 없어요.'))
+: '<div class="rows sup-day">' + lines + '<div class="row total"><span class="grow">그날 끝 남은 외상</span><span class="amt">' + ctx.num({ value: r.bal, v: base + 'bal' }, 'won') + '</span></div></div>') +
 (stmt ? '<p class="note">' + stmt + '</p>' : '') + (notes.length ? '<p class="note muted">' + notes.map(U.esc).join(' · ') + '</p>' : '');
 return _.panel('c4 sup-detail', F.date(r.date, { refYear: ref }) + ' (' + WEEK[dow(r.date)] + ')', U.esc(NAME(ctx, s.id)), body);
 }
@@ -5758,7 +6023,7 @@ return _.titleRow('거래처 외상', sub) +
 '<div class="filters sup-filters" data-keep="filters">' + supChips(ctx, s) + monthNav(ctx, s, ref) + '</div>' +
 tiles(ctx, s) + (plain(ctx) ? '' : gapNote(ctx, s, ref)) +
 '<div class="grid">' + _.panel('c8 sup-cal', F.month(s.month, { refYear: ref }) + ' 달력', U.esc(NAME(ctx, s.id)), calendar(ctx, s), null, { keep: 'sup-cal' }) +
-'<div class="c4 col-stack">' + dayDetail(ctx, s, ref) + paidList(ctx, s, ref) + '</div>' + yearTable(ctx, s, ref) + '</div>';
+'<div class="c4 col-stack">' + dayDetail(ctx, s, ref) + (chartOn(ctx) ? flowPanel(ctx, s, ref) : paidList(ctx, s, ref)) + '</div>' + yearTable(ctx, s, ref) + '</div>';
 },
 mount: function (rootEl, ctx) {
 rootEl.querySelectorAll('[data-sup]').forEach(function (b) { b.addEventListener('click', function () { go(ctx, { sup: b.getAttribute('data-sup'), y: null, m: null, day: null }); }); });
@@ -5768,7 +6033,19 @@ b.addEventListener('click', function () { var m = b.getAttribute('data-sup-month
 var sel = rootEl.querySelector('[data-sup-select]');
 if (sel) sel.addEventListener('change', function () { var m = sel.value; if (/^\d{4}-\d{2}$/.test(m)) go(ctx, { y: m.slice(0, 4), m: m.slice(5), day: null }); });
 rootEl.querySelectorAll('[data-sup-day]').forEach(function (b) { b.addEventListener('click', function () { go(ctx, { day: b.getAttribute('data-sup-day') }); }); });
+var s = state(ctx);
+if (!s.mo) return;
+if (chartOn(ctx)) {
+rootEl.querySelectorAll('[data-sup-span]').forEach(function (b) {
+b.addEventListener('click', function () { if (ctx.keep) ctx.keep(b); go(ctx, { chart: b.getAttribute('data-sup-span') === 'y' ? 'y' : null }); });
+});
+var el = rootEl.querySelector('#sup-flow');
+if (el && window.Charts && window.Charts.pairBars) drawFlow(el, ctx, s);
 }
+var cal = ctx.V && ctx.V.supSwipe ? rootEl.querySelector('.cal[data-swipe]') : null;
+if (cal && s.months.length > 1) swipeOn(cal, ctx, s);
+},
+swipeDir: swipeDir
 };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 (function (root) {
@@ -5871,6 +6148,17 @@ ctx.rerender();
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 (function (root) {
 var L = root.Ledger, U = L.ui, F = L.fmt, C = L.copy, _ = L.screens._;
+function lockSection(ctx) {
+var Lk = L.lock, K = C.lock;
+if (!Lk || !K || !ctx.lock) return '';
+var sup = Lk.support(), on = Lk.isOn(), ui = ctx.lock, body;
+var msg = ui.msg && ui.msg.text ? '<p class="lock-msg' + (ui.msg.bad ? ' bad' : '') + '" role="status">' + U.esc(ui.msg.text) + '</p>' : '';
+if (sup === 'no') body = '<p class="muted lock-na">' + U.esc(on ? K.naOn : K.na) + '</p>' + (on ? '<div class="row-actions"><button type="button" class="btn" data-action="lock-off">' + U.esc(K.turnOff) + '</button></div>' : '') + msg;
+else if (sup !== 'yes') body = '<p class="muted">' + U.esc(K.checking) + '</p>';
+else body = '<div class="switch-row"><label for="lock-toggle"><span class="t">' + U.esc(K.name) + '</span><span class="d">' + U.esc(on ? K.onDesc : K.offDesc) + '</span></label>' +
+'<input id="lock-toggle" class="switch" type="checkbox" role="switch" data-lock-toggle' + (on ? ' checked' : '') + (ui.busy ? ' disabled' : '') + '></div>' + msg;
+return section(K.title, K.desc, body);
+}
 function section(title, desc, panelHtml) {
 return '<div class="set-row"><div class="label"><h2>' + U.esc(title) + '</h2>' + (desc ? '<p>' + U.esc(desc) + '</p>' : '') + '</div><div class="set-panel">' + panelHtml + '</div></div>';
 }
@@ -5896,6 +6184,7 @@ return _.titleRow(G.settings, U.esc(G.settingsSub)) +
 '<div class="settings">' +
 section(G.connTitle, G.connDesc, conn) +
 section(G.linkTitle, info.stored ? G.linkStored : info.kind === 'own' ? G.linkNone : G.firstBody, '<div class="row-actions">' + linkBtns + '</div><div id="link-box"></div><div id="link-clear-box"></div>') +
+lockSection(ctx) +
 section(G.signoutTitle, G.signoutDesc, '<div class="row-actions"><button type="button" class="btn" data-action="signout">' + U.esc(G.signout) + '</button></div>') +
 '</div><p class="link-back"><a class="card-link" href="' + U.esc(ctx.link('/' + (home === 'overview' ? '' : home))) + '">' + U.esc(G.back) + '</a></p>';
 }
@@ -5995,7 +6284,7 @@ return n || C.appFallback;
 var MARK = '<svg class="mark" viewBox="0 0 22 22" aria-hidden="true" focusable="false"><path d="M3.5 10.2c2.6-3.7 12.4-3.7 15 0z" fill="currentColor"/><rect x="3.75" y="11" width="14.5" height="6.25" rx="3.1" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 var ICON_ACCT = '<svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="5.5" r="2.75"/><path d="M2.75 13.75c.9-2.6 2.9-3.9 5.25-3.9s4.35 1.3 5.25 3.9"/></svg>';
 function acctLink(cls) {
-if (!graphOn() || st.status !== 'ready' || !allowed('link')) return '';
+if (!graphOn() || st.status !== 'ready' || !allowed('link') || isLocked()) return '';
 var on = st.route && st.route.screen === 'link';
 return '<a class="' + cls + '" href="#link"' + (on ? ' aria-current="page"' : '') + (cls === 'acct-btn' ? ' aria-label="' + U.esc(C.graph.settings) + '"' : '') + '>' + ICON_ACCT + (cls === 'acct-btn' ? '' : '<span>' + U.esc(C.graph.settings) + '</span>') + '</a>';
 }
@@ -6004,8 +6293,13 @@ if (!st.model) return '';
 var fr = st.model.freshness(), ref = Number(String(st.model.today).slice(0, 4));
 var bank = '통장 ' + F.date(fr.bank.value, { refYear: ref }) + '까지';
 var stmt = fr.stmt.value ? '명세표 ' + F.date(fr.stmt.value, { refYear: ref }) + '까지' : '';
-var short = ['통장 ' + F.dateShort(fr.bank.value), fr.stmt.value ? '명세표 ' + F.dateShort(fr.stmt.value) : ''].filter(Boolean).join(' · ');
-return { bank: bank, stmt: stmt, line: [bank, stmt].filter(Boolean).join(' · '), short: short, refreshed: fr.refreshed };
+var stmtShort = fr.stmt.value ? '명세표 ' + F.dateShort(fr.stmt.value) : '';
+var short = ['통장 ' + F.dateShort(fr.bank.value), stmtShort].filter(Boolean).join(' · ');
+return { bank: bank, stmt: stmt, line: [bank, stmt].filter(Boolean).join(' · '), short: short, stmtShort: stmtShort, refreshed: fr.refreshed };
+}
+function stampText(fr) {
+if (!fr) return { line: '', short: '' };
+return V.stamp === 'stmt' && fr.stmt ? { line: fr.stmt, short: fr.stmtShort } : { line: fr.line, short: fr.short };
 }
 function term(k) { return (V.terms && V.terms[k]) || (C.terms && C.terms[k]) || k; }
 function navLabel(id) { var n = C.nav.filter(function (x) { return x.id === id; })[0]; return (V.terms && V.terms[id]) || (n ? n.label : id); }
@@ -6020,24 +6314,64 @@ return '<a class="' + cls + '" href="' + U.esc(link(n.path)) + '"' + (n.id === c
 }).join('');
 }
 function renderShell() {
-var name = U.esc(brandName()), fr = freshText();
-var f = st.model && st.route ? filters(st.route) : null;
+var lk = isLocked();
+var name = U.esc(lk ? C.appFallback : brandName()), fr = lk ? '' : freshText();
+var f = !lk && st.model && st.route ? filters(st.route) : null;
 var badge = C.viewBadge && C.viewBadge[VIEW] ? C.viewBadge[VIEW] : '';
 var scope = (badge ? U.esc(badge) + ' · ' : '') + U.esc(f ? (f.store === 'all' ? C.storeFallback.all : st.model.storeLabel(f.store)) : C.storeFallback.all);
-var synthetic = st.snap && st.snap.source && st.snap.source.synthetic;
-var tabbar = document.getElementById('tabbar');
+var synthetic = !lk && st.snap && st.snap.source && st.snap.source.synthetic;
+var tabbar = document.getElementById('tabbar'), appEl = document.querySelector('.app');
 if (tabbar) { tabbar.style.setProperty('--tabs', String(navList().length)); tabbar.setAttribute('data-view', VIEW); }
+if (appEl && (lk || appEl.classList.contains('locked'))) appEl.classList.toggle('locked', lk);
 document.getElementById('sidebar').innerHTML =
 '<div class="brand">' + MARK + '<div><div class="brand-name">' + name + '</div><div class="brand-scope">' + scope + '</div></div></div>' +
-'<nav aria-label="메뉴"><div class="nav">' + navItems('nav-item', true) + '</div></nav>' +
+(lk ? '' : '<nav aria-label="메뉴"><div class="nav">' + navItems('nav-item', true) + '</div></nav>') +
 '<div class="bottom">' + (fr ? '<span>' + U.esc(fr.bank) + '</span>' + (fr.stmt ? '<span>' + U.esc(fr.stmt) + '</span>' : '') +
 (fr.refreshed ? '<span>' + U.esc(F.date(String(fr.refreshed).slice(0, 10)) + ' ' + F.time(fr.refreshed)) + ' 갱신</span>' : '') : '') +
 (synthetic ? '<span class="synthetic">' + U.esc(C.states.synthetic) + '</span>' : '') + acctLink('nav-item acct-link') + '</div>';
-var stamp = '<span class="stamp"><span class="long">' + U.esc(fr ? fr.line : '') + '</span><span class="short">' + U.esc(fr ? fr.short : '') + '</span></span>', acct = acctLink('acct-btn');
+var sp = stampText(fr), stamp = '<span class="stamp"><span class="long">' + U.esc(sp.line) + '</span><span class="short">' + U.esc(sp.short) + '</span></span>', acct = acctLink('acct-btn');
 document.getElementById('topbar').innerHTML = '<div class="brand">' + MARK + '<div class="brand-name">' + name + '</div>' + (badge ? '<span class="view-badge">' + U.esc(badge) + '</span>' : '') + '</div>' +
 (acct ? '<span class="top-end">' + stamp + acct + '</span>' : stamp);
-document.getElementById('tabs-top').innerHTML = navItems('tab', false);
-document.getElementById('tabbar').innerHTML = navItems('tab', true);
+document.getElementById('tabs-top').innerHTML = lk ? '' : navItems('tab', false);
+document.getElementById('tabbar').innerHTML = lk ? '' : navItems('tab', true);
+}
+function lockAvail() { return !!(L.lock && (BUILD.mode === 'web' || (DEV && graphOn()))); }
+function isLocked() { return lockAvail() && L.lock.locked(); }
+var lockUi = { busy: false, err: null, msg: null };
+var RELOGIN_KEY = 'ledger.lock.relogin';
+var LOCK_ICON = '<svg class="lock-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.25 10.5V8a3.75 3.75 0 0 1 7.5 0v2.5M12 14.5v2"/></svg>';
+function lockErrText(e, kind) {
+var K = C.lock || {}, code = e && e.code;
+if (kind === 'enable') return (K.enableErr && (K.enableErr[code] || K.enableErr.failed)) || '';
+return code === 'unsupported' ? K.unsupported : K.unlockErr;
+}
+function lockHtml() {
+var K = C.lock || {}, e = lockUi.err, gone = !!(e && e.unsupported);
+var btns = (gone ? '' : '<button type="button" class="btn primary" data-action="unlock"' + (lockUi.busy ? ' disabled' : '') + '>' + U.esc(lockUi.busy ? K.unlocking : e ? K.retry : K.unlock) + '</button>') +
+(e ? (gone ? '' : ' ') + '<button type="button" class="btn' + (gone ? ' primary' : '') + '" data-action="lock-relogin">' + U.esc(K.relogin) + '</button>' : '');
+return '<div class="title-row"><div><h1 tabindex="-1">' + U.esc(K.lockedTitle) + '</h1></div></div>' +
+'<section class="state lock-screen" aria-live="polite">' + LOCK_ICON + '<p>' + U.esc(K.lockedBody) + '</p><div class="row-actions">' + btns + '</div>' +
+(e ? '<p class="lock-err" role="alert">' + U.esc(e.text) + '</p><p class="lock-note">' + U.esc(K.reloginNote) + '</p>' : '') + '</section>';
+}
+function lockToggle(input) {
+var K = C.lock || {};
+if (!lockAvail() || lockUi.busy) return;
+if (input.checked) {
+var p = L.lock.enable();
+lockUi.busy = true; lockUi.msg = { text: K.registering }; render();
+p.then(function () { lockUi.busy = false; lockUi.msg = { text: K.onDone }; announce(K.onDone); render(); },
+function (e) { lockUi.busy = false; lockUi.msg = { text: lockErrText(e, 'enable'), bad: true }; render(); });
+} else { L.lock.disable(); lockUi.msg = { text: K.offDone }; announce(K.offDone); render(); }
+}
+function reloginPending() { var v = null; try { v = sessionStorage.getItem(RELOGIN_KEY); sessionStorage.removeItem(RELOGIN_KEY); } catch (e) { v = null; } return v === '1'; }
+function relogin() {
+var a = st.adapter;
+if (L.lock) L.lock.disable();
+lockUi.busy = false; lockUi.err = null;
+try { sessionStorage.setItem(RELOGIN_KEY, '1'); } catch (x) { }
+if (st.unwatch) { st.unwatch(); st.unwatch = null; }
+dropSnapshot(); st.status = 'loading'; render();
+if (a && a.signOut) Promise.resolve(a.signOut()).then(function (r) { if (r && r.reload) load(); }); else load();
 }
 function noticesHtml() {
 var out = [], fr = st.model ? st.model.freshness() : null, mode = st.adapter ? st.adapter.kind : 'file';
@@ -6088,7 +6422,7 @@ if (window.requestAnimationFrame) window.requestAnimationFrame(fix);
 function activeKey() {
 var a = document.activeElement;
 if (!a || a === document.body) return null;
-var attrs = ['data-store', 'data-year', 'data-month', 'data-month-chip', 'data-pick-month', 'data-go-month', 'data-period-reset', 'data-year-select', 'data-place', 'data-period', 'data-kpi', 'data-type', 'data-pref', 'data-toggle', 'data-basis', 'id'];
+var attrs = ['data-store', 'data-year', 'data-month', 'data-month-chip', 'data-pick-month', 'data-go-month', 'data-period-reset', 'data-year-select', 'data-place', 'data-period', 'data-kpi', 'data-type', 'data-pref', 'data-toggle', 'data-basis', 'data-sup-span', 'id'];
 for (var i = 0; i < attrs.length; i++) { var v = a.getAttribute(attrs[i]); if (v != null) return attrs[i] === 'id' ? '#' + CSS.escape(v) : '[' + attrs[i] + '="' + CSS.escape(v) + '"]'; }
 return null;
 }
@@ -6100,6 +6434,7 @@ route: route, f: f, M: bankView ? st.modelBank : st.model, bankView: bankView, s
 inbox: V.inbox && L.inbox ? L.inbox : null,
 loadTx: loadTx, txOk: txOk, loadTxo: loadTxo, txoOk: txoOk, addDrill: function (d) { st.drills.push(d); return st.drills.length - 1; }, keep: keepFrom,
 adapter: st.adapter, status: st.status, link: link, setFilter: setFilter, setParam: setParam, setPref: setPref, rerender: render, brand: brandName(),
+lock: lockAvail() ? { busy: lockUi.busy, msg: lockUi.msg } : null,
 num: function (x, unit, opts) { return U.num(x, unit, Object.assign({ units: st.prefs.units }, opts || {})); },
 delta: function (x, unit, good, opts) { return U.delta(x, unit, good, Object.assign({ units: st.prefs.units }, opts || {})); },
 storeName: function (code) { return code === 'all' ? C.storeFallback.all : st.model.storeLabel(code); }
@@ -6112,6 +6447,21 @@ var rp = {}; route.params.forEach(function (v, k) { rp[k] = v; });
 history.replaceState(null, '', location.pathname + location.search + hashFor(route.path, rp));
 }
 var main = document.getElementById('main'), key = activeKey(), screenChanged = st.lastScreen !== route.screen + '|' + route.arg;
+if (screenChanged && lockUi.msg && !lockUi.busy) lockUi.msg = null;
+if (isLocked()) {
+var firstLock = st.lastScreen !== 'lock';
+st.lastScreen = 'lock';
+renderShell();
+if (L.pop) L.pop.close();
+main.removeAttribute('aria-busy');
+main.innerHTML = lockHtml();
+document.title = C.appFallback;
+if (firstLock) { keepAt = null; focusTitle(main); window.scrollTo(0, 0); }
+st.rendered = true;
+window.__LEDGER_READY__ = true;
+document.dispatchEvent(new CustomEvent('ledger:rendered', { detail: { screen: 'lock' } }));
+return;
+}
 st.lastScreen = route.screen + '|' + route.arg;
 renderShell();
 if (st.status === 'loading') { main.innerHTML = U.skeleton(route.screen, navLabel); main.setAttribute('aria-busy', 'true'); return; }
@@ -6253,9 +6603,11 @@ if (forced === 'unavailable') res = { state: 'unavailable', reason: qs.get('as')
 if (forced === 'empty') res = { state: 'empty' };
 if (forced === 'error') throw Object.assign(new Error('예시 오류예요.'), { userMessage: '자료를 못 읽었어요. 잠시 뒤 다시 시도해 주세요.' });
 if (forced === 'loading') return new Promise(function () { });
+var relogin = lockAvail() && reloginPending();
 if (res.state !== 'ready') {
 st.status = res.state || 'error'; st.reason = res.reason || null; st.error = res.error || null;
 if (graphOn()) dropSnapshot();
+if (relogin && res.state === 'signedOut' && a.signIn) a.signIn();
 return null;
 }
 return Promise.resolve(a.load()).then(function (snap) { return setSnapshot(snap, false); }).then(function () {
@@ -6285,6 +6637,8 @@ st.loadError = { cachedAt: (c1 && c1.savedAt) || (st.snap && st.snap.meta && st.
 });
 }
 function onClick(e) {
+var lt = e.target.closest('[data-lock-toggle]');
+if (lt) { lockToggle(lt); return; }
 var dr = e.target.closest('[data-drill]');
 if (dr && L.pop && st.ctx) { var d = st.drills[Number(dr.getAttribute('data-drill'))]; if (d) L.pop.drill(st.ctx, d, dr); return; }
 var pk = e.target.closest('[data-pick-month],[data-go-month]');
@@ -6309,7 +6663,15 @@ var act = t.getAttribute('data-action'), a = st.adapter;
 if (act === 'skip') { var mm = document.getElementById('main'), h1 = mm && mm.querySelector('h1'); (h1 || mm).focus(); return; }
 if (act === 'retry') { load(); return; }
 if (act === 'signin' && a && a.signIn) { a.signIn(); return; }
-if (act === 'signout' && a && a.signOut) { Promise.resolve(a.signOut()).then(function (r) { if (r && r.reload) load(); }); return; }
+if (act === 'signout' && a && a.signOut) { if (lockAvail()) L.lock.disable(); Promise.resolve(a.signOut()).then(function (r) { if (r && r.reload) load(); }); return; }
+if (act === 'unlock' && lockAvail()) {
+var up = L.lock.unlock();
+lockUi.busy = true; lockUi.err = null; render();
+up.then(function () { lockUi.busy = false; lockUi.err = null; }, function (x) { lockUi.busy = false; lockUi.err = { text: lockErrText(x), unsupported: !!(x && x.code === 'unsupported') }; render(); });
+return;
+}
+if (act === 'lock-relogin') { relogin(); return; }
+if (act === 'lock-off' && lockAvail()) { L.lock.disable(); lockUi.msg = { text: (C.lock || {}).offDone }; announce(lockUi.msg.text); render(); return; }
 var lbox = document.getElementById('link-box');
 if (act === 'link-change' && lbox) { lbox.innerHTML = linkFormHtml('', true); var li = lbox.querySelector('input'); if (li) li.focus(); return; }
 if (act === 'link-cancel') { if (lbox) lbox.innerHTML = ''; else render(); return; }
@@ -6356,6 +6718,7 @@ document.addEventListener('change', onChange);
 document.addEventListener('submit', onSubmit);
 window.addEventListener('hashchange', render);
 try { st.adapter = pickAdapter(); } catch (e) { st.status = 'error'; st.error = e; render(); return; }
+if (lockAvail()) L.lock.start(function (why) { if (why === 'support' && !(st.route && st.route.screen === 'link')) return; render(); });
 load();
 }
 L.app = { state: st, view: VIEW, render: render, filters: filters, link: link, setFilter: setFilter, setParam: setParam, announce: announce, reload: load, keep: keepFrom,
