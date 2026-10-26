@@ -1,4 +1,4 @@
-window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-26T06:29:49.509Z' };
+window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-26T11:53:08.769Z' };
 
 (function (root, factory) {
 var api = factory();
@@ -56,7 +56,7 @@ var EXT_TABLES = [
 { name: 'ext_food_basis', snap: 'foodBasis', id: ['month', 'supplier'], cols: cols('month:month supplier:text basis:text buy:half paid:half') },
 { name: 'ext_tax_paid', snap: 'taxPaid', id: ['month', 'store', 'kind'], cols: cols('month:month store:text kind:text amount:half') },
 { name: 'ext_tax_pays', snap: 'taxPays', id: ['date', 'store', 'seq'], cols: cols('date:date store:text seq:int kind:text amount:won') },
-{ name: 'ext_sup_daily', snap: 'supDaily', id: ['supplier', 'date'], cols: cols('supplier:text date:date buy:won b2:won be:won bc:won adj:won paid:won bal:won stmt:won src:text flag:text') },
+{ name: 'ext_sup_daily', snap: 'supDaily', id: ['supplier', 'date'], cols: cols('supplier:text date:date buy:won b2:won be:won bc:won adj:won fix:won paid:won bal:won stmt:won src:text flag:text') },
 { name: 'ext_sup_open', snap: 'supOpen', id: ['supplier'], cols: cols('supplier:text date:date bal:won first_date:date last_date:date last_bal:won') },
 { name: 'ext_sup_gaps', snap: 'supGaps', id: ['supplier', 'from'], cols: cols('supplier:text from:date to:date amount:won') },
 { name: 'ext_review_text', snap: 'reviewText', id: ['id'], cols: cols('id:text text:text answer:text') },
@@ -904,11 +904,12 @@ owner: { label: '사장님용', nav: ['pnl', 'debts', 'sup'], home: 'pnl', share
 terms: { debts: '부채', debtsTotal: '부채 합계', debtsAll: '부채 전체', payPerMonth: '한 달에 갚을 금액' },
 debtTable: { kids: false, source: false, unknownNote: false, hideEmpty: ['loan', 'etc'], payoff: false },
 subShare: true, debtChart: { cols: ['nain', 'taejo', 'hyunjin'] }, plain: true, flowPop: false, plainFlow: true, kpis: ['revenue', 'op_profit', 'op_margin'], kpiLabels: { revenue: '입금' }, flowBarsOnly: true,
-supChart: true, supSwipe: true, stamp: 'stmt',
+supChart: true, supSwipe: true, stamp: 'stmt', outside: { supRows: ['nain', 'taejo', 'hyunjin', 'bethel'] },
 pnlTable: { revShare: false, slimLabel: true, labels: { rent_fixed: '고정비', delivery_fees: '배달', op_cost: '비용 합계' } } },
 admin: { label: '관리용', nav: ['overview', 'debts', 'sup', 'price', 'pnl', 'util', 'review', 'data'], home: 'overview', reasons: true, notes: true, multiPeriod: true, details: true, drill: true, bankToggle: true,
 terms: {}, debtTable: { kids: true, source: true, unknownNote: true, hideEmpty: [] }, debtChart: { cols: ['nain', 'taejo', 'hyunjin'] }, inbox: true, taxPays: true,
-reviewTodo: true }
+reviewTodo: true,
+outside: { supRows: ['nain', 'taejo', 'hyunjin', 'bethel'] } }
 },
 DEBT_EXCLUDE: [{ id: 'bethel', why: '작은 외상' }],
 DEBT_MARKS: { months: ['2023-02'], bands: true },
@@ -1809,6 +1810,15 @@ if (okD && cv.length) debt = { change: val(sumVals(cv), cp.join(' + ')), cols: d
 return { months: ms, store: store, adjusted: adjOn, bankFood: bankFood, earned: earned, uses: uses, usedTotal: usedTotal, left: left, bank: bank, diff: diff, shift: shift, debt: debt, hasBank: hasBank, hasLoanP: hasLoanP, hasKw: hasKw, hasPtax: hasPtax, hasTaxX: hasTaxX };
 }
 function foodBasisOf(month, supplier) { var f = (snap.foodBasis || []).filter(function (x) { return x.month === month && x.supplier === supplier; })[0]; return f ? f.basis : null; }
+function foodDiff(supplier, list) {
+var vals = [], paths = [];
+(snap.foodBasis || []).forEach(function (f) {
+if (f.supplier !== supplier || f.basis !== 'S' || (list || []).indexOf(f.month) < 0 || !isNum(f.paid) || !isNum(f.buy)) return;
+var k = 'foodBasis[' + f.month + '/' + f.supplier + '].';
+vals.push(f.paid - f.buy); paths.push('(' + k + 'paid - ' + k + 'buy)');
+});
+return vals.length ? val(sumVals(vals), plus(paths)) : val(0, 'ui:zero');
+}
 function bcGaps(store, list) {
 var stores = store === 'all' ? ['2ho', 'eungam'] : [store], out = [];
 var inList = list ? function (m) { return list.indexOf(m) >= 0; } : function () { return true; };
@@ -1884,7 +1894,7 @@ return o && isNum(o.bal) ? val(o.bal, 'supOpen[' + id + '].bal') : val(null, nul
 function supMonth(id, m) {
 var rows = supDays(id).filter(function (r) { return r.date.slice(0, 7) === m; });
 var sum = function (f) { var s = sumVals(rows.map(function (r) { return r[f]; })); return val(s, s == null ? null : 'sum(supDaily[' + id + '/' + m + '-*].' + f + ')'); };
-return { month: m, rows: rows, buy: sum('buy'), b2: sum('b2'), be: sum('be'), bc: sum('bc'), adj: sum('adj'), paid: sum('paid'),
+return { month: m, rows: rows, buy: sum('buy'), b2: sum('b2'), be: sum('be'), bc: sum('bc'), adj: sum('adj'), fix: sum('fix'), paid: sum('paid'),
 nPaid: rows.filter(function (r) { return isNum(r.paid) && r.paid; }).length, nBuy: rows.filter(function (r) { return isNum(r.buy) && r.buy; }).length,
 start: supBalAt(id, addMonths(m, -1)), end: supBalAt(id, m) };
 }
@@ -2073,7 +2083,7 @@ sumOver: sumOver, metricOver: metricOver, yearMonths: yearMonths, sameMonthsLast
 debtCell: debtCell, colName: colName, LEAF: LEAF, supplierMonth: supplierMonth,
 util: util, utilGrid: utilGrid, utilPlaces: utilPlaces, utilIssues: utilIssues, utilBankOnly: utilBankOnly, utilNotes: utilNotes, utilCell: utilCell, notesFor: notesFor,
 COST_ROWS: COST_ROWS, SHOWN_COSTS: COSTS, DRIVERS: DRIVERS_I, REV_PARTS: REV_PARTS, KPI_IDS: KPI_IDS, adjusted: adjOn, basis: adjOn ? 'adjusted' : 'bank', hasAdj: !!(snap.pnlAdj && snap.pnlAdj.length),
-taxTable: taxTable, foodBank: foodBank, adjSum: adjSum, sumOverBank: sumOverBank, foodBasisOf: foodBasisOf, bcGaps: bcGaps, taxRepay: taxRepay, taxRepayMonths: taxRepayMonths, taxPayList: taxPayList, FLOW_USES: FLOW_USES,
+taxTable: taxTable, foodBank: foodBank, adjSum: adjSum, sumOverBank: sumOverBank, foodBasisOf: foodBasisOf, foodDiff: foodDiff, bcGaps: bcGaps, taxRepay: taxRepay, taxRepayMonths: taxRepayMonths, taxPayList: taxPayList, FLOW_USES: FLOW_USES,
 reviewTextOf: reviewTextOf, supIds: supIds, supOpen: supOpen, supDays: supDays, supGaps: supGaps, supMonths: supMonths, supMonth: supMonth, supBalAt: supBalAt, supMeta: snap.supMeta || null,
 itemList: itemList, itemMonthly: itemMonthly, itemMeta: snap.itemMeta || null,
 splitHalf: !!(snap.adjMeta && snap.adjMeta.half_rows > 0 && snap.adjMeta.half_rows_h === snap.adjMeta.half_rows && snap.adjMeta.half_excel === true)
@@ -3063,41 +3073,93 @@ s.setAttribute('aria-label', ariaLabel || items.map((it) => (it.tip || (it.lines
 };
 draw(); watch(el, draw); settle(draw);
 }
-function pairBars(el, { labels, tickLabels = null, series, shared = true, format = fmt.int, tickFormat = null, height = 240, xAt = null, hi = null, ariaLabel = null }) {
+function levels(el, { labels, tickLabels = null, units, names = {}, format = fmt.int, tickFormat = null, height = 240, xAt = null, hi = null, ariaLabel = null, empty = '–', buyTone = '--ink', paidTone = '--chart-1' }) {
 el._fmt = format;
+const RING = 1.5, ok = (v) => v != null && Number.isFinite(v), amt = (v) => (ok(v) ? v : 0), moved = (v) => Math.abs(amt(v)) >= 0.5;
+const shape = (parent, kind, cx, cy, r, fill) => {
+if (kind === 'diamond') { const d = r * 1.3; return svg('path', { d: `M${cx.toFixed(1)} ${(cy - d).toFixed(1)}L${(cx + d).toFixed(1)} ${cy.toFixed(1)}L${cx.toFixed(1)} ${(cy + d).toFixed(1)}L${(cx - d).toFixed(1)} ${cy.toFixed(1)}Z`, fill }, parent); }
+return svg('circle', { cx: cx.toFixed(1), cy: cy.toFixed(1), r, fill }, parent);
+};
+const mark = (parent, kind, fill, ring, cx, cy, r, rw = RING) => { if (rw) shape(parent, kind, cx, cy, r + rw, ring); return shape(parent, kind, cx, cy, r, fill); };
 const draw = () => {
 const { s, w, h } = frame(el, heightOf(height));
-const tick = tickFormat || format, ink = css(el, '--axis-ink', '#6b6b6b'), neg = css(el, '--negative', '#c4242a');
-const nums = (sr) => sr.values.filter((v) => v != null && Number.isFinite(v));
-const scale = (list) => { const lo = Math.min(0, ...list), top = Math.max(0, ...list); return ticks(lo, top > lo ? top : lo + 1, 3); };
-const yts = shared ? [scale(series.flatMap(nums))] : series.map((sr) => scale(nums(sr)));
-if (shared) yts[1] = yts[0];
-const capH = 22, gapH = 12, padB = 26, ph = Math.max(40, (h - padB - capH * 2 - gapH) / 2), tops = [capH, capH * 2 + ph + gapH];
-const padL = 12 + Math.max(...yts.flat().map((v) => measure(s, tick(v), 12)));
-const n = labels.length, band = (w - padL) / Math.max(1, n), bw = Math.max(2, Math.min(band * 0.62, 40));
-const x = (i) => padL + band * i + band / 2;
+const ink = css(el, buyTone, '#111'), blue = css(el, paidTone, '#2f6fdf'), axisInk = css(el, '--axis-ink', '#6b6b6b'), ring = css(el, '--surface', '#fff');
+const n = labels.length, tick = tickFormat || format;
+const lv = units.flatMap((u) => (u ? [u.start, u.start + amt(u.buy), u.start + amt(u.buy) + amt(u.gap), u.end] : [])).filter(ok);
+if (!lv.length) { s.setAttribute('aria-label', ariaLabel || ''); return; }
+let lo = Math.min(...lv), top = Math.max(...lv);
+const span0 = Math.max(Math.abs(top) * 0.02, 10000);
+if (top - lo < span0) { const mid = (top + lo) / 2; lo = mid - span0 / 2; top = mid + span0 / 2; }
+const pad = (top - lo) * 0.03, yt = [4, 5, 6].map((c) => ticks(lo - pad, top + pad, c)).reduce((a, b) => (b.at(-1) - b[0] < a.at(-1) - a[0] && b.length <= 7 ? b : a));
+const padL = 12 + Math.max(...yt.map((v) => measure(s, tick(v), 12))), padB = 26, padT = 10;
+const band = (w - padL) / Math.max(1, n), x = (i) => padL + band * i + band / 2;
+const y = (v) => padT + (h - padT - padB) * (1 - (v - yt[0]) / (yt.at(-1) - yt[0]));
+const R = Math.max(2.5, Math.min(3.8, band * 0.32)), gapX = Math.min(band * 0.28, 7);
 const g = svg('g', {}, s);
-if (hi != null && hi >= 0 && hi < n) svg('rect', { x: x(hi) - band / 2, y: tops[0], width: band, height: tops[1] + ph - tops[0], fill: css(el, '--sel-col', '#eef3fb') }, g);
-series.forEach((sr, k) => {
-const yt = yts[k], y = (v) => tops[k] + ph * (1 - (v - yt[0]) / (yt.at(-1) - yt[0]));
-const col = css(el, sr.tone || (k ? '--chart-1' : '--chart-2'), k ? '#2f6fdf' : '#8a8a8a');
-axes(g, el, { w, h, padL, padB, yt, y, labels: k === series.length - 1 ? tickLabels || labels : [], x, band: true, at: xAt, tick, boldAt: hi });
-sr.values.forEach((v, i) => {
-if (v == null || !Number.isFinite(v)) return;
-const y0 = y(0), y1 = y(v);
-if (Math.abs(y1 - y0) < 0.5) return;
-titled(svg('rect', { x: x(i) - bw / 2, y: Math.min(y0, y1), width: bw, height: Math.max(1, Math.abs(y1 - y0)), fill: v < 0 ? neg : col, 'shape-rendering': 'crispEdges' }, g), `${labels[i]} ${sr.name} ${format(v)}`);
+if (hi != null && hi >= 0 && hi < n) svg('rect', { x: x(hi) - band / 2, y: padT, width: band, height: h - padT - padB, fill: css(el, '--sel-col', '#eef3fb') }, g);
+const tl = tickLabels || labels, kept = [];
+const at = xPicks(tl, w - padL, xAt).sort((a, b) => (a === hi ? -1 : b === hi ? 1 : a - b)).filter((i) => {
+const tw = measure(s, String(tl[i]), 12, i === hi ? 600 : 400), l = Math.max(0, Math.min(w - tw, x(i) - tw / 2)), b = [l, l + tw];
+if (!kept.every((q) => b[1] + 6 <= q[0] || b[0] >= q[1] + 6)) return false;
+kept.push(b); return true;
+}).sort((a, b) => a - b);
+axes(g, el, { w, h, padL, padB, yt, y, labels: tl, x, band: true, at, tick, boldAt: hi });
+const steps = units.map((u, i) => {
+if (!u) return null;
+const list = [['buy', amt(u.buy)], ['gap', amt(u.gap)], ['paid', -amt(u.paid)]].filter((m) => Math.abs(m[1]) >= 0.5);
+let lvl = u.start;
+return list.map((m, j) => { const from = lvl; lvl += m[1]; return { kind: m[0], x: x(i) + (j - (list.length - 1) / 2) * gapX, from, to: lvl }; });
 });
-svg('line', { x1: padL, x2: w, y1: y(0), y2: y(0), stroke: ink, 'stroke-width': 1, opacity: 0.8, 'shape-rendering': 'crispEdges' }, g);
-svg('rect', { x: padL, y: tops[k] - 16, width: 10, height: 10, rx: 2, fill: col }, g);
-text(g, sr.name, { x: padL + 15, y: tops[k] - 7, 'font-size': 12, 'font-weight': 600, fill: css(el, '--ink', '#111') });
+let d = '', open = false;
+units.forEach((u, i) => {
+if (!u) { open = false; return; }
+d += (open ? 'L' : 'M') + (x(i) - band / 2).toFixed(1) + ' ' + y(u.start).toFixed(1);
+for (const st of steps[i]) d += 'L' + st.x.toFixed(1) + ' ' + y(st.from).toFixed(1) + 'L' + st.x.toFixed(1) + ' ' + y(st.to).toFixed(1);
+d += 'L' + (x(i) + band / 2).toFixed(1) + ' ' + y(u.end).toFixed(1);
+open = true;
 });
-s.setAttribute('aria-label', ariaLabel || `${series.map((sr) => sr.name).join(' · ')}, ${labels[0]} – ${labels.at(-1)}`);
+if (d) svg('path', { d, fill: 'none', stroke: axisInk, 'stroke-width': 1.25, 'stroke-linejoin': 'round', opacity: 0.85 }, g);
+const all = steps.flatMap((list) => list || []);
+for (const st of all) if (st.kind !== 'gap') svg('line', { x1: st.x.toFixed(1), x2: st.x.toFixed(1), y1: y(st.from).toFixed(1), y2: y(st.to).toFixed(1), stroke: st.kind === 'buy' ? ink : blue, 'stroke-width': 2.5 }, g);
+for (const st of all) if (st.kind === 'buy') mark(g, 'dot', ink, ring, st.x, y(st.to), R);
+for (const st of all) if (st.kind === 'paid') mark(g, 'diamond', blue, ring, st.x, y(st.to), R);
+const rule = svg('line', { y1: padT, y2: h - padB, stroke: axisInk, 'stroke-width': 1, opacity: 0, 'shape-rendering': 'crispEdges' }, g);
+const fx = svg('g', {}, s);
+const tip = tooltip(el), hit = svg('rect', { x: padL, y: 0, width: Math.max(0, w - padL), height: h, fill: 'transparent' }, s);
+const idx = (ev) => { const r = s.getBoundingClientRect(), px = ((ev.clientX - r.left) / Math.max(1, r.width)) * w; return Math.max(0, Math.min(n - 1, Math.floor((px - padL) / band))); };
+const key = (draw1) => { const k = svg('svg', { width: 10, height: 10, viewBox: '0 0 10 10', 'aria-hidden': 'true' }); k.style.cssText = 'display:inline-block;margin-right:5px;overflow:visible'; draw1(k); return k; };
+const hide = () => { tip.style.opacity = 0; rule.setAttribute('opacity', 0); fx.replaceChildren(); };
+const show = (i) => {
+const u = units[i];
+if (!u) { hide(); return; }
+rule.setAttribute('x1', x(i)); rule.setAttribute('x2', x(i)); rule.setAttribute('opacity', 0.35);
+fx.replaceChildren();
+for (const st of steps[i]) { if (st.kind === 'buy') mark(fx, 'dot', ink, ring, st.x, y(st.to), R + 1.5); else if (st.kind === 'paid') mark(fx, 'diamond', blue, ring, st.x, y(st.to), R + 1.5); }
+if (!steps[i].length) mark(fx, 'dot', axisInk, ring, x(i), y(u.end), 2.5);
+tip.replaceChildren();
+const head = document.createElement('div'); head.style.opacity = '0.7'; head.textContent = labels[i]; tip.appendChild(head);
+const row = (k, name, text) => { const div = document.createElement('div'), b = document.createElement('b'); b.style.fontWeight = '600'; b.textContent = text; div.append(k, document.createTextNode(name + ' '), b); tip.appendChild(div); };
+row(key((k) => mark(k, 'dot', ink, ring, 5, 5, 3.5, 0)), names.buy || '', moved(u.buy) ? format(u.buy) : empty);
+row(key((k) => mark(k, 'diamond', blue, ring, 5, 5, 3.5, 0)), names.paid || '', moved(u.paid) ? format(u.paid) : empty);
+row(key((k) => svg('line', { x1: 0, x2: 10, y1: 5, y2: 5, stroke: axisInk, 'stroke-width': 1.5 }, k)), names.end || '', format(u.end));
+const r = s.getBoundingClientRect(), left = Math.min((x(i) / w) * r.width + 12, r.width - tip.offsetWidth - 4);
+tip.style.left = `${Math.max(0, left)}px`; tip.style.top = '0px'; tip.style.opacity = 1;
+};
+el._lvHide = hide;
+hit.addEventListener('pointermove', (ev) => show(idx(ev)));
+hit.addEventListener('pointerdown', (ev) => show(idx(ev)));
+hit.addEventListener('pointerleave', (ev) => { if (ev.pointerType === 'mouse') hide(); });
+hit.addEventListener('pointercancel', hide);
+s.setAttribute('aria-label', ariaLabel || `${names.end || ''}, ${labels[0]} – ${labels.at(-1)}`);
 };
 draw(); watch(el, draw); settle(draw);
+if (!el._lvAway) {
+el._lvAway = (ev) => { if (!el.isConnected) { document.removeEventListener('pointerdown', el._lvAway, true); return; } if (!el.contains(ev.target) && el._lvHide) el._lvHide(); };
+document.addEventListener('pointerdown', el._lvAway, true);
+}
 }
 function watch(el, draw) { if (!('ResizeObserver' in window)) return; let w = el.clientWidth; new ResizeObserver(() => { if (Math.abs(el.clientWidth - w) > 4) { w = el.clientWidth; draw(); } }).observe(el); }
-window.Charts = { line, diverging, ticks, fmt, columns, stackLine, stack100, stackStyles, track, trackStyles, trackLegend, legendEl, placeValueLabels, flowBars, pairBars };
+window.Charts = { line, diverging, ticks, fmt, columns, stackLine, stack100, stackStyles, track, trackStyles, trackLegend, legendEl, placeValueLabels, flowBars, levels };
 })();
 (function (root) {
 var L = root.Ledger = root.Ledger || {};
@@ -4855,35 +4917,68 @@ return _.panel('c6 mix', '매출 구성', U.esc(periodLabel(ctx)) + ' · ' + U.e
 '<div class="lead">' + ctx.num({ value: kp.value, v: kp.v }, 'man', { cls: 'kpi-value' }) + (kp.delta && F.isNum(kp.delta.value) ? '<span class="delta">' + since + ctx.delta(kp.delta, 'man', 'up') + '</span>' : '') + '</div><div id="pnl-mix"></div><table class="legend-table"><caption class="sr-only">매출 구성</caption><thead><tr><th scope="col">어디서</th><th class="n" scope="col">매출(원)</th><th class="n" scope="col">비율</th></tr></thead><tbody>' + rows + '</tbody></table>' + note);
 }
 var OUT_PERSONAL = ['kiwoom', 'owner_transfer', 'family_transfer', 'personal_out', 'personal_tax'];
+function outCfg(ctx) { return (ctx.V && ctx.V.outside) || {}; }
+function useOf(fl, id) { return fl ? fl.uses.filter(function (u) { return u.id === id; })[0] || null : null; }
+function supParts(ctx, flows) {
+var M = ctx.M, ids = outCfg(ctx).supRows || [];
+if (ctx.f.store !== 'all' || !ids.length || !M.foodDiff) return null;
+var rows = ids.map(function (id) { var nm = _.supName(ctx, id); return { id: id, name: nm + ' 외상', xs: flows.map(function (fl) { return fl ? M.foodDiff(nm, fl.months) : null; }) }; });
+var same = flows.every(function (fl, j) {
+if (!fl) return true;
+var u = useOf(fl, 'supplier');
+return !!u && F.isNum(u.x.value) && Math.abs(rows.reduce(function (a, r) { return a + r.xs[j].value; }, 0) - u.x.value) < 0.5;
+});
+return same ? rows : null;
+}
 function outsidePanel(ctx) {
 var M = ctx.M, f = ctx.f, hide = ctx.prefs.hidePersonal, dc = (L.viewConfig || {}).FLOW_DEBT_COLS || [];
 if (!M.cashFlow) return '';
-var y = yearOf(ctx), opt = { bankFood: true, mergePersonal: !!(ctx.V && ctx.V.plainFlow) };
+var y = yearOf(ctx), opt = flowOpts(ctx);
 var colsL = f.multi ? [{ label: '고른 기간', months: f.period }] : f.annual ? [{ label: y + '년', months: M.yearMonths(f.store, y) }]
 : [{ label: F.month(f.month), months: [f.month] }, { label: y + '년', months: M.yearMonths(f.store, y) }];
 var flows = colsL.map(function (c) { return M.cashFlow(f.store, c.months, dc, opt); });
 if (!flows.some(Boolean)) return _.panel('c6 out-panel', '손익 밖 지출', U.esc(ctx.storeName(f.store)), U.emptyBlock(C.states.blockEmpty));
-var useOf = function (fl, id) { return fl ? fl.uses.filter(function (u) { return u.id === id; })[0] || null : null; };
 var nz = function (x) { return !!(x && F.isNum(x.value) && Math.abs(x.value) >= 0.5); };
 var pop = flowPopOn(ctx), admin = !!(ctx.V && ctx.V.details), T = C.flowLines;
-var nameHtml = function (id) { var t = (T[id] || { name: id }).name; return pop ? '<button type="button" class="txline" data-flow-line="' + id + '" aria-haspopup="dialog" title="' + U.esc(t) + ' 내역 보기">' + U.esc(t) + '</button>' : U.esc(t); };
+var nameHtml = function (id, text) { var t = text || (T[id] || { name: id }).name; return pop ? '<button type="button" class="txline" data-flow-line="' + id + '" aria-haspopup="dialog" title="' + U.esc(t) + ' 내역 보기">' + U.esc(t) + '</button>' : U.esc(t); };
 var cell = function (x, masked) { return '<td class="n">' + (masked ? '<span class="muted">가려 둠</span>' : x ? ctx.num(x, 'digits') : '<span class="dash">' + F.DASH + '</span>') + '</td>'; };
-var ids = [], body = '', maskedAny = false;
+var ids = [], body = '', maskedAny = false, inTotal = [], supOn = false;
+var line = function (name, xs, masked) { body += '<tr><th scope="row">' + name + '</th>' + xs.map(function (x) { return cell(x, masked); }).join('') + '</tr>'; inTotal.push(xs); };
 flows.forEach(function (fl) { if (fl) fl.uses.forEach(function (u) { if (ids.indexOf(u.id) < 0) ids.push(u.id); }); });
 ids.forEach(function (id) {
 var xs = flows.map(function (fl) { var u = useOf(fl, id); return u ? u.x : null; });
+if (id === 'supplier') {
+var parts = supParts(ctx, flows);
+if (parts) parts.forEach(function (p) { if (p.xs.some(nz)) { line(U.esc(p.name), p.xs, false); supOn = true; } });
+else if (xs.some(nz)) { line(nameHtml('supplier', '거래처 외상'), xs, false); supOn = true; }
+return;
+}
 if (!xs.some(nz)) return;
 var masked = hide && OUT_PERSONAL.indexOf(id) >= 0;
 if (masked) maskedAny = true;
-body += '<tr><th scope="row">' + (masked ? U.esc((T[id] || { name: id }).name) : nameHtml(id)) + '</th>' + xs.map(function (x) { return cell(x, masked); }).join('') + '</tr>';
+line(masked ? U.esc((T[id] || { name: id }).name) : nameHtml(id), xs, masked);
 if (id === 'loan' && admin) {
 var ps = flows.map(function (fl) { var u = useOf(fl, 'loan'); return u && u.parts ? u.parts.personal : null; });
 if (ps.some(nz)) body += '<tr class="sub-row"><th scope="row">' + nameHtml('loan_personal') + '</th>' + ps.map(function (x) { return cell(x, false); }).join('') + '</tr>';
 }
 });
-body += '<tr class="total"><th scope="row">합계</th>' + flows.map(function (fl) { return cell(fl ? fl.usedTotal : null, maskedAny); }).join('') + '</tr>';
+var totalOf = function (fl, j) {
+if (!fl) return null;
+var xs = inTotal.map(function (r) { return r[j]; }).filter(function (x) { return x && F.isNum(x.value) && x.v && String(x.v).indexOf('ui:') !== 0; });
+var s = xs.reduce(function (a, x) { return a + x.value; }, 0);
+return xs.length && F.isNum(fl.usedTotal.value) && Math.abs(s - fl.usedTotal.value) < 0.5 ? { value: s, v: xs.map(function (x) { return '(' + x.v + ')'; }).join(' + ') } : fl.usedTotal;
+};
+body += '<tr class="total"><th scope="row">합계</th>' + flows.map(function (fl, j) { return cell(totalOf(fl, j), maskedAny); }).join('') + '</tr>';
+var bankSame = flows.every(function (fl) { return !fl || (fl.bank && F.isNum(fl.diff.value) && Math.abs(fl.diff.value) < 0.5); });
+var leftName = bankSame ? '통장에 남은 돈' : '잔액';
+body += '<tr class="left"><th scope="row">' + leftName + '</th>' + flows.map(function (fl) { return cell(fl ? fl.left : null, maskedAny); }).join('') + '</tr>';
 var head = '<thead><tr><th scope="col">항목</th>' + colsL.map(function (c) { return '<th class="n" scope="col">' + U.esc(c.label) + '(원)</th>'; }).join('') + '</tr></thead>';
-var note = '영업이익에 넣지 않고 나간 돈이에요' + (M.adjusted ? '(세금 포함)' : '') + '. 지출 칸의 지출에서 거래처 외상 줄만 빼면 같아요.' + (f.store !== 'all' ? ' 기타에는 가게 사이 이체도 들어 있어요.' : '') + (maskedAny ? ' 개인 항목은 가렸어요.' : '');
+var note = (M.adjusted ? '영업이익에 넣지 않고 나간 돈이에요(세금 포함) — 합계는 지출 칸의 지출과 같아요.'
+: '영업이익(통장 기준)에 넣지 않고 나간 돈이에요. 통장 그대로 보기라 세금은 영업비용 안에 있고 거래처에 보낸 돈은 식재료비에 들어 있어서 세금·거래처 외상 줄이 없어요.') +
+' 영업이익 = 이 표의 합계 + ' + leftName + '이에요.' +
+(supOn ? ' 거래처 외상 줄은 명세표로 산 것과 통장으로 보낸 돈의 차이예요(더 보냈으면 숫자 · 덜 보냈으면 −, 명세표가 있는 달만). 외상 잔액이 실제로 얼마나 줄었는지는 부채·외상 화면에 있어요.' : '') +
+(!bankSame && flows.some(function (fl) { return fl && fl.bank; }) ? ' 잔액은 그 기간 통장 잔액 변화와 달라요 — 월세·급여·가족 명의 지출을 그 달 몫으로 옮긴 차이 등(지출 칸 참고 줄).' : '') +
+(f.store !== 'all' ? ' 기타에는 가게 사이 이체도 들어 있어요.' : '') + (maskedAny ? ' 개인 항목은 가렸어요.' : '');
 var noteHtml = ctx.V && ctx.V.quietNotes ? '' : '<p class="note">' + U.esc(note) + '</p>';
 return _.panel('c6 out-panel', '손익 밖 지출', U.esc((f.multi ? periodLabel(ctx) + ' · ' : '') + ctx.storeName(f.store)),
 '<table class="out-table"><caption class="sr-only">손익 밖 지출(원)</caption>' + head + '<tbody>' + body + '</tbody></table>' + noteHtml);
@@ -5130,7 +5225,8 @@ rootEl.querySelectorAll('.toggle[data-toggle="' + id + '"]').forEach(function (x
 rootEl.querySelectorAll('.item[data-parent="' + id + '"]').forEach(function (tr) { tr.hidden = !open; });
 });
 });
-}
+},
+outsidePanel: outsidePanel, supParts: supParts
 };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 (function (root) {
@@ -5309,16 +5405,20 @@ cur = null;
 if (a && a.isConnected && a.focus) a.focus({ preventScroll: true });
 }
 function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); close(); } }
-function place(layer, anchor) {
-var pop = layer.querySelector('.pop');
-if (!anchor || (window.matchMedia && window.matchMedia('(max-width: 640px)').matches)) return;
-var r = anchor.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = window.innerHeight;
-var w = Math.min(600, vw - 32);
-pop.style.width = w + 'px'; pop.style.transform = 'none';
-pop.style.left = Math.max(16, Math.min(r.left, vw - w - 16)) + 'px';
-var below = vh - r.bottom - 16, above = r.top - 16;
-if (below >= 360 || below >= above) { pop.style.top = Math.round(r.bottom + 8) + 'px'; pop.style.maxHeight = Math.max(260, below) + 'px'; }
-else { pop.style.bottom = Math.round(vh - r.top + 8) + 'px'; pop.style.maxHeight = Math.max(260, above) + 'px'; }
+var FIT = { min: 180, max: 420 };
+function px(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+function fitHeight(p, chartEl) {
+var pop = p && p.layer ? p.layer.querySelector('.pop') : null, body = p ? p.body : null;
+if (!pop || !body || !chartEl || !chartEl.isConnected) return FIT.min;
+var cs = getComputedStyle(pop), bs = getComputedStyle(body);
+var maxH = px(cs.maxHeight) || ((window.innerHeight || 0) - 32);
+var used = px(cs.borderTopWidth) + px(cs.borderBottomWidth) + px(cs.paddingTop) + px(cs.paddingBottom) + px(bs.paddingTop) + px(bs.paddingBottom);
+Array.prototype.forEach.call(pop.children, function (c) { if (c !== body) used += c.getBoundingClientRect().height; });
+Array.prototype.forEach.call(body.children, function (c) {
+var m = getComputedStyle(c);
+used += px(m.marginTop) + px(m.marginBottom) + (c === chartEl ? 0 : c.getBoundingClientRect().height);
+});
+return Math.round(Math.max(FIT.min, Math.min(FIT.max, maxH - used - 2)));
 }
 function open(anchor, title, sub) {
 close();
@@ -5332,7 +5432,6 @@ layer.innerHTML = '<div class="pop-back" data-pop-close></div>' +
 (document.querySelector('.app') || document.body).appendChild(layer);
 layer.addEventListener('click', function (e) { if (e.target.closest('[data-pop-close]')) { e.preventDefault(); close(); } });
 document.addEventListener('keydown', onKey, true);
-place(layer, anchor);
 cur = { layer: layer, anchor: anchor, body: layer.querySelector('.pop-body') };
 var x = layer.querySelector('.pop-x'); if (x) x.focus({ preventScroll: true });
 return cur;
@@ -5641,7 +5740,7 @@ p.body.innerHTML = '<div class="chart pop-flow-chart" id="pop-flow-chart"></div>
 (canTx ? '<p class="muted pop-flow-hint">빨간 막대나 줄 이름을 누르면 그 달 거래를 볼 수 있어요.</p>' : '');
 var el = p.body.querySelector('#pop-flow-chart');
 if (el && window.Charts && window.Charts.flowBars) window.Charts.flowBars(el, {
-items: items, format: F.man, tickFormat: F.tick, height: 200,
+items: items, format: F.man, tickFormat: F.tick, height: function () { return fitHeight(p, el); },
 onSelect: canTx ? function (i) { var it = items[i]; if (it && it.line) flow(ctx, it.line, anchor, [month]); } : null,
 ariaLabel: periodText(ctx, [month]) + ' 지출 막대. ' + items.map(function (it) { return it.tip + ' ' + F.man(it.value); }).join(', ') + '.'
 });
@@ -5791,7 +5890,7 @@ function pad2(n) { return (n < 10 ? '0' : '') + n; }
 function dow(d) { return new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)))).getUTCDay(); }
 function daysIn(m) { return new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate(); }
 function isNum(x) { return typeof x === 'number' && isFinite(x); }
-function cellNum(ctx, value, v) { return ctx.num({ value: value, v: v }, value < 100000 ? 'digits' : 'short'); }
+function cellNum(ctx, value, v) { return ctx.num({ value: value, v: v }, Math.abs(value) < 100000 ? 'digits' : 'short'); }
 function plain(ctx) { return !!(ctx.V && ctx.V.supPlain); }
 function dayBuy(r, base, pl) {
 var vals = [], vs = [];
@@ -5813,22 +5912,34 @@ if (Math.abs(dx) < min || Math.abs(dx) <= ratio * Math.abs(dy)) return 0;
 return dx < 0 ? 1 : -1;
 }
 function stepMonth(s, dir) { var i = s.months.indexOf(s.month), j = i + dir; return dir && i >= 0 && j >= 0 && j < s.months.length ? s.months[j] : null; }
+function knownSpan(ctx, s) { var o = ctx.M.supOpen(s.id) || {}; return { from: isNum(o.bal) ? o.date : o.first_date || null, to: o.last_date || null }; }
+function inSpan(sp, key) { var n = key.length; return (!sp.from || key >= sp.from.slice(0, n)) && (!sp.to || key <= sp.to.slice(0, n)); }
+function backStart(end, r) { return end - (r.buy || 0) - (r.adj || 0) - (r.fix || 0) + (r.paid || 0); }
 function flowData(ctx, s) {
-var pl = plain(ctx), out = [], k, m, mo;
+var pl = plain(ctx), out = [], k, m, mo, sp = knownSpan(ctx, s);
 if (yearly(ctx)) {
 var y = s.month.slice(0, 4);
 for (k = 1; k <= 12; k++) {
 m = y + '-' + pad2(k); mo = s.months.indexOf(m) >= 0 ? ctx.M.supMonth(s.id, m) : null;
-out.push({ key: m, label: F.month(m, { year: true }), tick: k + '월', buy: mo ? monthBuy(mo, pl) : null, paid: mo && mo.nPaid ? mo.paid : null, has: !!mo });
+var end = null, start = null;
+if (mo && isNum(mo.end.value)) {
+end = mo.end;
+start = isNum(mo.start.value) ? mo.start.value : backStart(end.value, { buy: mo.buy.value, adj: mo.adj.value, fix: mo.fix.value, paid: mo.paid.value });
+} else if (!mo && inSpan(sp, m)) { var b = ctx.M.supBalAt(s.id, m); if (isNum(b.value)) { end = b; start = b.value; } }
+out.push({ key: m, label: F.month(m, { year: true }), tick: k + '월', buy: mo ? monthBuy(mo, pl) : null, paid: mo && mo.nPaid ? mo.paid : null, has: !!mo, start: start, end: end });
 }
 return out;
 }
-var byDay = {};
+var byDay = {}, level = isNum(s.mo.start.value) ? s.mo.start.value : null;
 s.mo.rows.forEach(function (r) { byDay[Number(r.date.slice(8, 10))] = r; });
 for (k = 1; k <= daysIn(s.month); k++) {
-var r = byDay[k], date = s.month + '-' + pad2(k), base = 'supDaily[' + s.id + '/' + date + '].';
+var r = byDay[k], date = s.month + '-' + pad2(k), base = 'supDaily[' + s.id + '/' + date + '].', st = level, en = null;
+if (r && isNum(r.bal)) { en = { value: r.bal, v: base + 'bal' }; if (st == null) st = backStart(r.bal, r); }
+else if (r && st != null) en = { value: st + (r.buy || 0) + (r.adj || 0) + (r.fix || 0) - (r.paid || 0), v: null };
+else if (!r && st != null && inSpan(sp, date)) en = { value: st, v: null };
+if (en) level = en.value;
 out.push({ key: date, label: F.date(date, { refYear: 0 }) + ' (' + WEEK[dow(date)] + ')', tick: k + '일', buy: r ? dayBuy(r, base, pl) : null,
-paid: r && isNum(r.paid) && r.paid ? { value: r.paid, v: base + 'paid' } : null, has: !!r });
+paid: r && isNum(r.paid) && r.paid ? { value: r.paid, v: base + 'paid' } : null, has: !!r, start: en ? st : null, end: en });
 }
 return out;
 }
@@ -5842,12 +5953,28 @@ var y = s.month.slice(0, 4), paid = yearSum(ctx, s, y, 'paid');
 return { period: y + '년', buy: monthBuy({ buy: yearSum(ctx, s, y, 'buy'), adj: yearSum(ctx, s, y, 'adj') }, plain(ctx)), paid: isNum(paid.value) && paid.value ? paid : null };
 }
 function some(x) { return !!(x && isNum(x.value) && x.value); }
-function sameScale(data) {
-var top = function (f) { return data.reduce(function (a, d) { return d[f] && isNum(d[f].value) ? Math.max(a, d[f].value) : a; }, 0); };
-var a = top('buy'), b = top('paid');
-return !(a > 0 && b > 0) || Math.max(a, b) <= 3 * Math.min(a, b);
-}
 function flowHi(ctx, s) { return yearly(ctx) ? Number(s.month.slice(5)) - 1 : s.sel ? Number(s.sel.date.slice(8, 10)) - 1 : null; }
+var MARKS = [{ name: '매입', mark: 'dot', tone: '--ink', f: 'buy' }, { name: '입금', mark: 'diamond', tone: '--chart-1', f: 'paid' }];
+function chartData(ctx, s0) {
+var s = s0 || state(ctx);
+if (!s.mo) return null;
+var yr = yearly(ctx), data = flowData(ctx, s), hi = flowHi(ctx, s);
+var at = data.map(function (d, i) { return i; }).filter(function (i) { return yr ? hi == null || (i - hi) % 2 === 0 : i === 0 || (i + 1) % 5 === 0; });
+if (!yr && hi != null) at = at.filter(function (i) { return Math.abs(i - hi) > 2; }).concat([hi]).sort(function (a, b) { return a - b; });
+return {
+keys: data.map(function (d) { return d.key; }), labels: data.map(function (d) { return d.label; }), ticks: data.map(function (d) { return d.tick; }), at: at, hi: hi,
+units: data.map(function (d) {
+if (!d.end || !isNum(d.start)) return null;
+var buy = some(d.buy) ? d.buy.value : 0, paid = some(d.paid) ? d.paid.value : 0;
+return { start: d.start, buy: buy, paid: paid, gap: d.end.value - (d.start + buy - paid), end: d.end.value };
+}),
+marks: MARKS.map(function (m) { return { name: m.name, mark: m.mark, tone: m.tone }; })
+};
+}
+function keyMark(mark) {
+return '<svg class="key-mark ' + mark + '" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">' +
+(mark === 'diamond' ? '<path d="M6 0.4L11.6 6 6 11.6 0.4 6Z"/>' : '<circle cx="6" cy="6" r="4.5"/>') + '</svg>';
+}
 function flowPanel(ctx, s, ref) {
 var yr = yearly(ctx), data = flowData(ctx, s), sums = flowSums(ctx, s, ref);
 var amt = function (x) { return some(x) ? ctx.num(x, 'man') : '<span class="muted">없어요</span>'; };
@@ -5855,24 +5982,23 @@ var cell = function (x) { return some(x) ? ctx.num(x, 'digits') : '<span class="
 var seg = '<span class="segmented sup-span" role="group" aria-label="그래프 기간">' + [['m', '월간'], ['y', '연간']].map(function (it) {
 return '<button type="button" data-sup-span="' + it[0] + '" aria-pressed="' + ((it[0] === 'y') === yr) + '">' + it[1] + '</button>';
 }).join('') + '</span>';
-var rows = data.filter(function (d) { return d.has; }).map(function (d) { return [U.esc(yr ? F.month(d.key, { refYear: ref }) : d.label), cell(d.buy), cell(d.paid)]; });
-var notes = (sameScale(data) ? '' : '매입과 입금은 크기가 많이 달라서 눈금을 따로 그렸어요(왼쪽 숫자를 봐 주세요).') +
-(data.some(function (d) { return (d.buy && d.buy.value < 0) || (d.paid && d.paid.value < 0); }) ? ' 빨간 막대는 빼는 금액(보정·돌려받은 돈)이에요.' : '');
-var body = '<p class="chart-lead sup-flow-lead"><b>' + U.esc(sums.period) + '</b> 매입 ' + amt(sums.buy) + ' · 입금 ' + amt(sums.paid) + '</p>' + _.chartBox('sup-flow', 240) +
-(notes ? '<p class="note">' + U.esc(notes.trim()) + '</p>' : '') +
-U.asTable(NAME(ctx, s.id) + ' ' + sums.period + (yr ? ' 달마다' : ' 날마다') + ' 매입과 입금', [yr ? '달' : '날', '매입(원)', '입금(원)'], rows);
-return _.panel('c4 sup-flow', '매입과 입금', '', body, null, { keep: 'sup-flow', link: seg });
+var rows = data.filter(function (d) { return d.has; }).map(function (d) { return [U.esc(yr ? F.month(d.key, { refYear: ref }) : d.label), cell(d.buy), cell(d.paid), d.end && d.end.v ? ctx.num(d.end, 'digits') : '<span class="dash">' + F.DASH + '</span>']; });
+var moves = data.some(function (d) { return d.end && (some(d.buy) || some(d.paid)); });
+var key = function (i, html) { return '<span class="key">' + keyMark(MARKS[i].mark) + MARKS[i].name + ' ' + html + '</span>'; };
+var body = '<p class="chart-lead sup-flow-lead"><b>' + U.esc(sums.period) + '</b> ' + key(0, amt(sums.buy)) + ' · ' + key(1, amt(sums.paid)) + '</p>' +
+(moves ? _.chartBox('sup-flow', 240) : U.emptyBlock('이 ' + (yr ? '해' : '달') + '는 매입·입금이 없어요.')) +
+U.asTable(NAME(ctx, s.id) + ' ' + sums.period + (yr ? ' 달마다' : ' 날마다') + ' 매입 입금', [yr ? '달' : '날', '매입(원)', '입금(원)', '끝 외상(원)'], rows);
+return _.panel('c4 sup-flow', '매입 입금', '', body, null, { keep: 'sup-flow', link: seg });
 }
 function drawFlow(el, ctx, s) {
-var yr = yearly(ctx), data = flowData(ctx, s), sums = flowSums(ctx, s, 0), hi = flowHi(ctx, s);
-var val = function (x) { return x && isNum(x.value) ? x.value : null; }, say = function (x) { return some(x) ? F.man(x.value) : '없음'; };
-var at = data.map(function (d, i) { return i; }).filter(function (i) { return yr ? hi == null || (i - hi) % 2 === 0 : i === 0 || (i + 1) % 5 === 0; });
-if (!yr && hi != null) at = at.filter(function (i) { return Math.abs(i - hi) > 2; }).concat([hi]).sort(function (a, b) { return a - b; });
-window.Charts.pairBars(el, {
-labels: data.map(function (d) { return d.label; }), tickLabels: data.map(function (d) { return d.tick; }),
-series: [{ name: '매입', values: data.map(function (d) { return val(d.buy); }), tone: '--chart-2' }, { name: '입금', values: data.map(function (d) { return val(d.paid); }), tone: '--chart-1' }],
-shared: sameScale(data), format: F.man, tickFormat: F.tick, height: 240, xAt: at, hi: hi,
-ariaLabel: NAME(ctx, s.id) + ' ' + sums.period + (yr ? ' 달마다' : ' 날마다') + ' 매입(위 칸)과 입금(아래 칸) 막대. 매입 ' + say(sums.buy) + ', 입금 ' + say(sums.paid) + '.'
+var yr = yearly(ctx), cd = chartData(ctx, s), sums = flowSums(ctx, s, 0);
+var say = function (x) { return some(x) ? F.man(x.value) : '없음'; };
+var known = cd.units.filter(Boolean), a = known[0], b = known[known.length - 1];
+window.Charts.levels(el, {
+labels: cd.labels, tickLabels: cd.ticks, units: cd.units, names: { buy: MARKS[0].name, paid: MARKS[1].name, end: '끝 외상' }, buyTone: MARKS[0].tone, paidTone: MARKS[1].tone,
+format: F.man, tickFormat: F.tick, height: 240, xAt: cd.at, hi: cd.hi, empty: '없음',
+ariaLabel: NAME(ctx, s.id) + ' ' + sums.period + (yr ? ' 달마다' : ' 날마다') + ' 외상 잔액 계단 그래프' + (a ? ': ' + F.man(a.start) + '에서 ' + L.josa(F.man(b.end), '으로/로') : '') +
+'. 매입(먹색, 올라가는 선) ' + say(sums.buy) + ', 입금(파랑, 내려가는 선) ' + say(sums.paid) + '.'
 });
 }
 function swipeOn(cal, ctx, s) {
@@ -5931,6 +6057,7 @@ var adj = !pl && isNum(mo.adj.value) && mo.adj.value ? '<span class="delta">사�
 var d = isNum(mo.end.value) && isNum(mo.start.value) ? mo.end.value - mo.start.value : null;
 var dTxt = d == null ? '' : '<span class="delta ' + (d > 0 ? 'bad' : d < 0 ? 'good' : '') + '">지난달 끝보다 ' +
 ctx.num({ value: d, v: mo.end.v + ' - ' + mo.start.v }, 'man', { sign: true }) + '</span>';
+if (!pl && mo.fix && isNum(mo.fix.value) && mo.fix.value) dTxt += '<span class="delta">그중 정정 ' + ctx.num(mo.fix, 'man', { sign: true }) + '</span>';
 return '<div class="kpis sup-kpis">' +
 '<div class="kpi"><span class="kpi-label">이 달 청구</span><span class="kpi-value">' + ctx.num(buyX, 'man') + '</span><span class="delta">' + buySub + '</span>' + adj + '</div>' +
 '<div class="kpi"><span class="kpi-label">이 달 입금</span><span class="kpi-value">' + (mo.nPaid ? ctx.num(mo.paid, 'man') : '없어요') + '</span>' +
@@ -5961,12 +6088,15 @@ cells += '<button type="button" class="' + cls + '" data-sup-day="' + d + '" ari
 '<span class="cal-d">' + d + '</span>' +
 (bx ? '<span class="cal-buy">' + cellNum(ctx, bx.value, bx.v) + '</span>' : '') +
 (!pl && r.adj ? '<span class="cal-adj">+' + cellNum(ctx, r.adj, base + 'adj') + '</span>' : '') +
+(!pl && r.fix ? '<span class="cal-fix">정정 ' + cellNum(ctx, r.fix, base + 'fix') + '</span>' : '') +
 (r.paid ? '<span class="cal-paid">입금 ' + cellNum(ctx, r.paid, base + 'paid') + '</span>' : '') + '</button>';
 }
+var fixOn = !pl && s.mo.rows.some(function (r) { return isNum(r.fix) && r.fix; });
 return '<div class="cal" role="group" aria-label="' + U.esc(F.month(m, { refYear: 0 })) + ' 달력"' + (ctx.V && ctx.V.supSwipe ? ' data-swipe="month"' : '') + '>' +
 WEEK.map(function (w, i) { return '<span class="cal-w' + (i === 0 ? ' sun' : '') + '" aria-hidden="true">' + w + '</span>'; }).join('') + cells + '</div>' +
 '<p class="cal-legend"><span class="lg buy">숫자 = 그날 청구(명세표)</span><span class="lg paid">파란 칸 = 입금한 날</span>' +
-(!pl && gaps.some(function (g) { return g.to >= m + '-01' && g.from < m + '-' + pad2(n); }) ? '<span class="lg gap">빗금 = 명세표 사진이 없는 날(+금액 = 앞뒤 잔액으로 구간 몫을 한 번에 넣은 날)</span>' : '') + '</p>';
+(!pl && gaps.some(function (g) { return g.to >= m + '-01' && g.from < m + '-' + pad2(n); }) ? '<span class="lg gap">빗금 = 명세표 사진이 없는 날(+금액 = 앞뒤 잔액으로 구간 몫을 한 번에 넣은 날)</span>' : '') +
+(fixOn ? '<span class="lg fix">정정 = 장부 잔액을 명세표·통장에 맞춘 금액(매입 아니에요)</span>' : '') + '</p>';
 }
 function dayDetail(ctx, s, ref) {
 var r = s.sel; if (!r) return '';
@@ -5983,9 +6113,10 @@ var stmt = !pl && isNum(r.stmt) && isNum(r.bal) ? (r.stmt === r.bal ? '<span cla
 var notes = [];
 if (!pl && r.src && SRC[r.src]) notes.push('청구 출처: ' + SRC[r.src]);
 if (!pl && r.flag && r.flag.indexOf('G') >= 0) notes.push('명세표 사진이 없는 기간이라 날마다 청구는 모르고, 앞뒤 잔액으로 구간 몫을 마지막 날에 한 번에 넣었어요');
+if (!pl && isNum(r.fix) && r.fix) notes.push('정정은 장부 잔액을 명세표·통장에 맞춘 금액이에요(매입 아니에요)');
 if (r.flag && r.flag.indexOf('U') >= 0) notes.push('이 날 입금은 아직 통장 자료(' + (ctx.M.supMeta && ctx.M.supMeta.bank_last ? F.date(ctx.M.supMeta.bank_last, { refYear: ref }) : '') + '까지)에 없어 명세표에 적힌 것이에요 — 통장이 들어오면 맞춰 봐요');
 var lines = line(ctx.storeName('2ho') + ' 매입', 'b2') + line(ctx.storeName('eungam') + ' 매입', 'be') + (pl ? sumLine(s.id === 'nain' ? '공통 매입' : '매입(두 가게 함께)', ['bc', 'adj']) : line(s.id === 'nain' ? '공통 매입' : '매입(두 가게 함께)', 'bc')) +
-(pl ? '' : line('사진 없는 기간 몫', 'adj')) + line('입금', 'paid');
+(pl ? '' : line('사진 없는 기간 몫', 'adj') + line('정정', 'fix', { sign: true })) + line('입금', 'paid');
 var body = (chartOn(ctx) ? (lines ? '<div class="rows sup-day">' + lines + '</div>' : U.emptyBlock('이 날은 매입·입금이 없어요.'))
 : '<div class="rows sup-day">' + lines + '<div class="row total"><span class="grow">그날 끝 남은 외상</span><span class="amt">' + ctx.num({ value: r.bal, v: base + 'bal' }, 'won') + '</span></div></div>') +
 (stmt ? '<p class="note">' + stmt + '</p>' : '') + (notes.length ? '<p class="note muted">' + notes.map(U.esc).join(' · ') + '</p>' : '');
@@ -6040,12 +6171,12 @@ rootEl.querySelectorAll('[data-sup-span]').forEach(function (b) {
 b.addEventListener('click', function () { if (ctx.keep) ctx.keep(b); go(ctx, { chart: b.getAttribute('data-sup-span') === 'y' ? 'y' : null }); });
 });
 var el = rootEl.querySelector('#sup-flow');
-if (el && window.Charts && window.Charts.pairBars) drawFlow(el, ctx, s);
+if (el && window.Charts && window.Charts.levels) drawFlow(el, ctx, s);
 }
 var cal = ctx.V && ctx.V.supSwipe ? rootEl.querySelector('.cal[data-swipe]') : null;
 if (cal && s.months.length > 1) swipeOn(cal, ctx, s);
 },
-swipeDir: swipeDir
+swipeDir: swipeDir, chartData: chartData
 };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 (function (root) {
