@@ -1,4 +1,4 @@
-window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-26T02:52:09.331Z' };
+window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-26T03:39:28.710Z' };
 
 (function (root, factory) {
 var api = factory();
@@ -900,7 +900,7 @@ UTIL_REF_PLACES: ['개인'],
 REVIEW_ITEM_LABELS: { '유흥·심야 카드사용': '개인', '미분류': '미분류' },
 PERSONAL_REVIEW_ITEMS: ['유흥·심야 카드사용'],
 VIEWS: {
-owner: { label: '사장님용', nav: ['pnl', 'debts', 'sup'], home: 'pnl', shared: true, staleNote: false, supPlain: true, supHide: ['bethel'], reasons: false, notes: false, multiPeriod: false, details: false, drill: false,
+owner: { label: '사장님용', nav: ['pnl', 'debts', 'sup'], home: 'pnl', shared: true, staleNote: false, quietNotes: true, supPlain: true, supHide: ['bethel'], reasons: false, notes: false, multiPeriod: false, details: false, drill: false,
 terms: { debts: '부채', debtsTotal: '부채 합계', debtsAll: '부채 전체', payPerMonth: '한 달에 갚을 금액' },
 debtTable: { kids: false, source: false, unknownNote: false, hideEmpty: ['loan', 'etc'], payoff: false },
 subShare: true, debtChart: { cols: ['nain', 'taejo', 'hyunjin'] }, plain: true, flowPop: false, plainFlow: true, kpis: ['revenue', 'op_profit', 'op_margin'], kpiLabels: { revenue: '입금' }, flowBarsOnly: true },
@@ -4213,7 +4213,7 @@ return '<p class="note tax-note">' + text + '</p>' + (bad.length ? '<p class="no
 function supplierChartPanel(ctx, cc, data, shown, future) {
 var M = ctx.M, names = chartNames(M, cc), DT = L.screens._debtText, cmp = M.compareCols(cc, M.debtMonth, M.prevDebtMonth), ch = cmp.change.value;
 var nowRow = data.filter(function (d) { return d.month === M.debtMonth; })[0];
-var lead = nowRow && F.isNum(nowRow.value) ? '<p class="chart-lead">지금 ' + ctx.num({ value: nowRow.value, v: nowRow.v }, 'man') +
+var lead = nowRow && F.isNum(nowRow.value) && !(ctx.V && ctx.V.quietNotes) ? '<p class="chart-lead">지금 ' + ctx.num({ value: nowRow.value, v: nowRow.v }, 'man') +
 (F.isNum(ch) ? ' · ' + DT.since(M, M.prevDebtMonth) + ' ' + (ch < 0 ? ctx.num({ value: -ch, v: '-(' + cmp.change.v + ')' }, 'man', { tone: 'good' }) + ' 줄었어요' : ch > 0 ? ctx.num(cmp.change, 'man', { tone: 'bad' }) + ' 늘었어요' : '그대로예요') : '') + '</p>' : '';
 var d2 = trimmed(data);
 return _.panel('c12 d-chart', '거래처 외상, 달마다', U.esc(names) + ' · ' + U.esc(F.month(shown[0] && shown[0].month)) + '부터' + (future ? ' · 점선은 예측' : ''),
@@ -4707,8 +4707,9 @@ if (ps.some(nz)) body += '<tr class="sub-row"><th scope="row">' + nameHtml('loan
 body += '<tr class="total"><th scope="row">합계</th>' + flows.map(function (fl) { return cell(fl ? fl.usedTotal : null, maskedAny); }).join('') + '</tr>';
 var head = '<thead><tr><th scope="col">항목</th>' + colsL.map(function (c) { return '<th class="n" scope="col">' + U.esc(c.label) + '(원)</th>'; }).join('') + '</tr></thead>';
 var note = '영업이익에 넣지 않고 나간 돈이에요' + (M.adjusted ? '(세금 포함)' : '') + '. 지출 칸의 지출에서 거래처 외상 줄만 빼면 같아요.' + (f.store !== 'all' ? ' 기타에는 가게 사이 이체도 들어 있어요.' : '') + (maskedAny ? ' 개인 항목은 가렸어요.' : '');
+var noteHtml = ctx.V && ctx.V.quietNotes ? '' : '<p class="note">' + U.esc(note) + '</p>';
 return _.panel('c6 out-panel', '손익 밖 지출', U.esc((f.multi ? periodLabel(ctx) + ' · ' : '') + ctx.storeName(f.store)),
-'<table class="out-table"><caption class="sr-only">손익 밖 지출(원)</caption>' + head + '<tbody>' + body + '</tbody></table><p class="note">' + U.esc(note) + '</p>');
+'<table class="out-table"><caption class="sr-only">손익 밖 지출(원)</caption>' + head + '<tbody>' + body + '</tbody></table>' + noteHtml);
 }
 function foodNote(ctx, T) {
 if (!ctx.M.adjusted || !ctx.M.foodBank) return '';
@@ -4716,6 +4717,7 @@ var list = (T.groups ? T.months : T.months.filter(function (m, i) { return T.has
 return list.length ? '<p class="note">* 식재료비: 명세표가 없어 통장에서 낸 돈으로 넣은 거래처 — ' + U.esc(list.join(' · ')) + '</p>' : '';
 }
 function tableNotes(ctx, T) {
+if (ctx.V && ctx.V.quietNotes) return '';
 if (!subOn(ctx)) return foodNote(ctx, T) + '<p class="note">' + U.esc(C.opexNote) + (txOn(ctx, 'food') ? ' 줄 이름을 누르면 그 기간의 통장 거래를 모두 볼 수 있어요.' : '') + '</p>';
 var moved = T.costs.some(function (c) { return shownItems(ctx, c).some(function (it) { return it.moved; }); });
 return foodNote(ctx, T) + '<p class="note pc-only">대분류 이름을 누르면 안 항목이 그 대분류 중 몇 %인지 보여요(합계 칸 = 한 해).' + (ctx.M.adjusted ? ' 식재료 안 항목 %는 통장에서 낸 돈 기준이에요.' : '') + '</p>' +
@@ -4807,7 +4809,7 @@ var half = f.store !== 'all' && M.hasHalf([f.store], fl.months) ? '<p class="not
 var fms = flowMonths(ctx), lefts = monthLefts(ctx, fms);
 var tbl = U.asTable('달마다 잔액', ['달', '잔액(원)'], fms.map(function (m, i) { return [lefts[i] ? '<button type="button" class="txline" data-flow-month="' + m + '" aria-haspopup="dialog">' + U.esc(F.month(m)) + '</button>' : U.esc(F.month(m)), ctx.num(lefts[i] || { value: null, v: 'ui:none' }, 'digits', { sign: true })]; }));
 var chart = _.chartBox('pnl-flow', 220, _.barLabels(ctx, lefts, 'short')) + tbl;
-var lead = '<p class="muted flow-lead">달마다 잔액(영업이익 − 지출)이에요. 0 위 = 남은 달, 아래 빨강 = 이익보다 더 쓴 달. 막대를 누르면 그 달 어디에 썼는지 보여요. 거래처에 명세표보다 더 보낸 달은 \'외상 갚음\', 덜 보낸 달은 \'외상 남음\'으로 보여요.</p>';
+var lead = ctx.V && ctx.V.quietNotes ? '' : '<p class="muted flow-lead">달마다 잔액(영업이익 − 지출)이에요. 0 위 = 남은 달, 아래 빨강 = 이익보다 더 쓴 달. 막대를 누르면 그 달 어디에 썼는지 보여요. 거래처에 명세표보다 더 보낸 달은 \'외상 갚음\', 덜 보낸 달은 \'외상 남음\'으로 보여요.</p>';
 var listOn = !(ctx.V && ctx.V.flowBarsOnly);
 var span = !f.multi ? yearOf(ctx) + '년' : fms.length > 1 ? F.month(fms[0], { year: true }) + '~' + F.month(fms[fms.length - 1], { refYear: Number(fms[0].slice(0, 4)) }) : periodLabel(ctx);
 return _.panel('c12 flow', '지출', U.esc(span) + ' · ' + U.esc(ctx.storeName(f.store)),
@@ -4872,7 +4874,7 @@ return _.titleRow(C.nav[2].label, sub) + _.periodFilters(ctx) + selLine(ctx) + b
 '<div class="grid mt">' +
 '<section class="panel c12" role="tabpanel" id="pnl-chart-panel" data-keep="chart" aria-labelledby="tab-' + sel.id + '"><header><h2>' + U.esc(chartTitle) + '</h2><span class="meta">' + U.esc(ctx.storeName(f.store)) + '</span></header>' +
 _.chartBox('pnl-chart', 220, _.barLabels(ctx, series.map(function (p) { return p.hasData && F.isNum(p.value) ? { value: p.value, v: p.v } : null; }), sel.kind === 'ratio' ? 'pct0' : 'short')) +
-(bc ? '<p class="note bc-note"><span class="bc-sw" aria-hidden="true"></span>' + bc.note + '</p>' : '') + (ratioNote(ctx, sel) ? '<p class="note">' + U.esc(ratioNote(ctx, sel)) + '</p>' : '') +
+(bc && !(ctx.V && ctx.V.quietNotes) ? '<p class="note bc-note"><span class="bc-sw" aria-hidden="true"></span>' + bc.note + '</p>' : '') + (ratioNote(ctx, sel) ? '<p class="note">' + U.esc(ratioNote(ctx, sel)) + '</p>' : '') +
 U.asTable(chartTitle, ['달', sel.kind === 'ratio' ? sel.label : sel.label + '(원)'], tableRows) + '</section>' +
 flowPanel(ctx) + mixPanel(ctx) + outsidePanel(ctx) +
 _.panel('c12 pnl-table-panel', tableTitle, (M.adjusted ? '월 맞춤' : '통장 기준') + ' · 원', yearTable(ctx, T, selIdx) + monthRows(ctx, T) +
