@@ -1,4 +1,4 @@
-window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-26T11:53:08.769Z' };
+window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-26T12:31:30.949Z' };
 
 (function (root, factory) {
 var api = factory();
@@ -3073,19 +3073,19 @@ s.setAttribute('aria-label', ariaLabel || items.map((it) => (it.tip || (it.lines
 };
 draw(); watch(el, draw); settle(draw);
 }
-function levels(el, { labels, tickLabels = null, units, names = {}, format = fmt.int, tickFormat = null, height = 240, xAt = null, hi = null, ariaLabel = null, empty = '–', buyTone = '--ink', paidTone = '--chart-1' }) {
+function balance(el, { labels, tickLabels = null, units, names = {}, format = fmt.int, tickFormat = null, height = 240, xAt = null, hi = null, ariaLabel = null, empty = '–', lineTone = '--ink', buyTone = '--ink', paidTone = '--chart-1' }) {
 el._fmt = format;
-const RING = 1.5, ok = (v) => v != null && Number.isFinite(v), amt = (v) => (ok(v) ? v : 0), moved = (v) => Math.abs(amt(v)) >= 0.5;
+const ok = (v) => v != null && Number.isFinite(v), moved = (v) => ok(v) && Math.abs(v) >= 0.5;
 const shape = (parent, kind, cx, cy, r, fill) => {
 if (kind === 'diamond') { const d = r * 1.3; return svg('path', { d: `M${cx.toFixed(1)} ${(cy - d).toFixed(1)}L${(cx + d).toFixed(1)} ${cy.toFixed(1)}L${cx.toFixed(1)} ${(cy + d).toFixed(1)}L${(cx - d).toFixed(1)} ${cy.toFixed(1)}Z`, fill }, parent); }
 return svg('circle', { cx: cx.toFixed(1), cy: cy.toFixed(1), r, fill }, parent);
 };
-const mark = (parent, kind, fill, ring, cx, cy, r, rw = RING) => { if (rw) shape(parent, kind, cx, cy, r + rw, ring); return shape(parent, kind, cx, cy, r, fill); };
+const mark = (parent, kind, fill, ring, cx, cy, r, rw) => { if (rw) shape(parent, kind, cx, cy, r + rw, ring); return shape(parent, kind, cx, cy, r, fill); };
 const draw = () => {
 const { s, w, h } = frame(el, heightOf(height));
-const ink = css(el, buyTone, '#111'), blue = css(el, paidTone, '#2f6fdf'), axisInk = css(el, '--axis-ink', '#6b6b6b'), ring = css(el, '--surface', '#fff');
+const lineCol = css(el, lineTone, '#111'), ink = css(el, buyTone, '#111'), blue = css(el, paidTone, '#2f6fdf'), axisInk = css(el, '--axis-ink', '#6b6b6b'), ring = css(el, '--surface', '#fff');
 const n = labels.length, tick = tickFormat || format;
-const lv = units.flatMap((u) => (u ? [u.start, u.start + amt(u.buy), u.start + amt(u.buy) + amt(u.gap), u.end] : [])).filter(ok);
+const lv = units.flatMap((u, i) => (u ? (i && units[i - 1] ? [u.end] : [u.start, u.end]) : [])).filter(ok);
 if (!lv.length) { s.setAttribute('aria-label', ariaLabel || ''); return; }
 let lo = Math.min(...lv), top = Math.max(...lv);
 const span0 = Math.max(Math.abs(top) * 0.02, 10000);
@@ -3094,7 +3094,7 @@ const pad = (top - lo) * 0.03, yt = [4, 5, 6].map((c) => ticks(lo - pad, top + p
 const padL = 12 + Math.max(...yt.map((v) => measure(s, tick(v), 12))), padB = 26, padT = 10;
 const band = (w - padL) / Math.max(1, n), x = (i) => padL + band * i + band / 2;
 const y = (v) => padT + (h - padT - padB) * (1 - (v - yt[0]) / (yt.at(-1) - yt[0]));
-const R = Math.max(2.5, Math.min(3.8, band * 0.32)), gapX = Math.min(band * 0.28, 7);
+const R = 4, RW = band < 12 ? 1.5 : 2;
 const g = svg('g', {}, s);
 if (hi != null && hi >= 0 && hi < n) svg('rect', { x: x(hi) - band / 2, y: padT, width: band, height: h - padT - padB, fill: css(el, '--sel-col', '#eef3fb') }, g);
 const tl = tickLabels || labels, kept = [];
@@ -3104,25 +3104,15 @@ if (!kept.every((q) => b[1] + 6 <= q[0] || b[0] >= q[1] + 6)) return false;
 kept.push(b); return true;
 }).sort((a, b) => a - b);
 axes(g, el, { w, h, padL, padB, yt, y, labels: tl, x, band: true, at, tick, boldAt: hi });
-const steps = units.map((u, i) => {
-if (!u) return null;
-const list = [['buy', amt(u.buy)], ['gap', amt(u.gap)], ['paid', -amt(u.paid)]].filter((m) => Math.abs(m[1]) >= 0.5);
-let lvl = u.start;
-return list.map((m, j) => { const from = lvl; lvl += m[1]; return { kind: m[0], x: x(i) + (j - (list.length - 1) / 2) * gapX, from, to: lvl }; });
-});
-let d = '', open = false;
+let d = '';
 units.forEach((u, i) => {
-if (!u) { open = false; return; }
-d += (open ? 'L' : 'M') + (x(i) - band / 2).toFixed(1) + ' ' + y(u.start).toFixed(1);
-for (const st of steps[i]) d += 'L' + st.x.toFixed(1) + ' ' + y(st.from).toFixed(1) + 'L' + st.x.toFixed(1) + ' ' + y(st.to).toFixed(1);
-d += 'L' + (x(i) + band / 2).toFixed(1) + ' ' + y(u.end).toFixed(1);
-open = true;
+if (!u) return;
+if (!i || !units[i - 1]) d += 'M' + (x(i) - band / 2).toFixed(1) + ' ' + y(u.start).toFixed(1);
+d += 'L' + x(i).toFixed(1) + ' ' + y(u.end).toFixed(1);
 });
-if (d) svg('path', { d, fill: 'none', stroke: axisInk, 'stroke-width': 1.25, 'stroke-linejoin': 'round', opacity: 0.85 }, g);
-const all = steps.flatMap((list) => list || []);
-for (const st of all) if (st.kind !== 'gap') svg('line', { x1: st.x.toFixed(1), x2: st.x.toFixed(1), y1: y(st.from).toFixed(1), y2: y(st.to).toFixed(1), stroke: st.kind === 'buy' ? ink : blue, 'stroke-width': 2.5 }, g);
-for (const st of all) if (st.kind === 'buy') mark(g, 'dot', ink, ring, st.x, y(st.to), R);
-for (const st of all) if (st.kind === 'paid') mark(g, 'diamond', blue, ring, st.x, y(st.to), R);
+if (d) svg('path', { d, fill: 'none', stroke: lineCol, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, g);
+units.forEach((u, i) => { if (u && u.mark === 'dot') mark(g, 'dot', ink, ring, x(i), y(u.end), R, RW); });
+units.forEach((u, i) => { if (u && u.mark === 'diamond') mark(g, 'diamond', blue, ring, x(i), y(u.end), R, RW); });
 const rule = svg('line', { y1: padT, y2: h - padB, stroke: axisInk, 'stroke-width': 1, opacity: 0, 'shape-rendering': 'crispEdges' }, g);
 const fx = svg('g', {}, s);
 const tip = tooltip(el), hit = svg('rect', { x: padL, y: 0, width: Math.max(0, w - padL), height: h, fill: 'transparent' }, s);
@@ -3134,18 +3124,18 @@ const u = units[i];
 if (!u) { hide(); return; }
 rule.setAttribute('x1', x(i)); rule.setAttribute('x2', x(i)); rule.setAttribute('opacity', 0.35);
 fx.replaceChildren();
-for (const st of steps[i]) { if (st.kind === 'buy') mark(fx, 'dot', ink, ring, st.x, y(st.to), R + 1.5); else if (st.kind === 'paid') mark(fx, 'diamond', blue, ring, st.x, y(st.to), R + 1.5); }
-if (!steps[i].length) mark(fx, 'dot', axisInk, ring, x(i), y(u.end), 2.5);
+if (u.mark) mark(fx, u.mark, u.mark === 'diamond' ? blue : ink, ring, x(i), y(u.end), R + 1.5, 2);
+else mark(fx, 'dot', lineCol, ring, x(i), y(u.end), 3, 1.5);
 tip.replaceChildren();
 const head = document.createElement('div'); head.style.opacity = '0.7'; head.textContent = labels[i]; tip.appendChild(head);
 const row = (k, name, text) => { const div = document.createElement('div'), b = document.createElement('b'); b.style.fontWeight = '600'; b.textContent = text; div.append(k, document.createTextNode(name + ' '), b); tip.appendChild(div); };
 row(key((k) => mark(k, 'dot', ink, ring, 5, 5, 3.5, 0)), names.buy || '', moved(u.buy) ? format(u.buy) : empty);
 row(key((k) => mark(k, 'diamond', blue, ring, 5, 5, 3.5, 0)), names.paid || '', moved(u.paid) ? format(u.paid) : empty);
-row(key((k) => svg('line', { x1: 0, x2: 10, y1: 5, y2: 5, stroke: axisInk, 'stroke-width': 1.5 }, k)), names.end || '', format(u.end));
+row(key((k) => svg('line', { x1: 0, x2: 10, y1: 5, y2: 5, stroke: lineCol, 'stroke-width': 2 }, k)), names.end || '', format(u.end));
 const r = s.getBoundingClientRect(), left = Math.min((x(i) / w) * r.width + 12, r.width - tip.offsetWidth - 4);
 tip.style.left = `${Math.max(0, left)}px`; tip.style.top = '0px'; tip.style.opacity = 1;
 };
-el._lvHide = hide;
+el._balHide = hide;
 hit.addEventListener('pointermove', (ev) => show(idx(ev)));
 hit.addEventListener('pointerdown', (ev) => show(idx(ev)));
 hit.addEventListener('pointerleave', (ev) => { if (ev.pointerType === 'mouse') hide(); });
@@ -3153,13 +3143,13 @@ hit.addEventListener('pointercancel', hide);
 s.setAttribute('aria-label', ariaLabel || `${names.end || ''}, ${labels[0]} – ${labels.at(-1)}`);
 };
 draw(); watch(el, draw); settle(draw);
-if (!el._lvAway) {
-el._lvAway = (ev) => { if (!el.isConnected) { document.removeEventListener('pointerdown', el._lvAway, true); return; } if (!el.contains(ev.target) && el._lvHide) el._lvHide(); };
-document.addEventListener('pointerdown', el._lvAway, true);
+if (!el._balAway) {
+el._balAway = (ev) => { if (!el.isConnected) { document.removeEventListener('pointerdown', el._balAway, true); return; } if (!el.contains(ev.target) && el._balHide) el._balHide(); };
+document.addEventListener('pointerdown', el._balAway, true);
 }
 }
 function watch(el, draw) { if (!('ResizeObserver' in window)) return; let w = el.clientWidth; new ResizeObserver(() => { if (Math.abs(el.clientWidth - w) > 4) { w = el.clientWidth; draw(); } }).observe(el); }
-window.Charts = { line, diverging, ticks, fmt, columns, stackLine, stack100, stackStyles, track, trackStyles, trackLegend, legendEl, placeValueLabels, flowBars, levels };
+window.Charts = { line, diverging, ticks, fmt, columns, stackLine, stack100, stackStyles, track, trackStyles, trackLegend, legendEl, placeValueLabels, flowBars, balance };
 })();
 (function (root) {
 var L = root.Ledger = root.Ledger || {};
@@ -4917,12 +4907,13 @@ return _.panel('c6 mix', '매출 구성', U.esc(periodLabel(ctx)) + ' · ' + U.e
 '<div class="lead">' + ctx.num({ value: kp.value, v: kp.v }, 'man', { cls: 'kpi-value' }) + (kp.delta && F.isNum(kp.delta.value) ? '<span class="delta">' + since + ctx.delta(kp.delta, 'man', 'up') + '</span>' : '') + '</div><div id="pnl-mix"></div><table class="legend-table"><caption class="sr-only">매출 구성</caption><thead><tr><th scope="col">어디서</th><th class="n" scope="col">매출(원)</th><th class="n" scope="col">비율</th></tr></thead><tbody>' + rows + '</tbody></table>' + note);
 }
 var OUT_PERSONAL = ['kiwoom', 'owner_transfer', 'family_transfer', 'personal_out', 'personal_tax'];
+var OUT_SUP = 'out-sup';
 function outCfg(ctx) { return (ctx.V && ctx.V.outside) || {}; }
 function useOf(fl, id) { return fl ? fl.uses.filter(function (u) { return u.id === id; })[0] || null : null; }
 function supParts(ctx, flows) {
 var M = ctx.M, ids = outCfg(ctx).supRows || [];
 if (ctx.f.store !== 'all' || !ids.length || !M.foodDiff) return null;
-var rows = ids.map(function (id) { var nm = _.supName(ctx, id); return { id: id, name: nm + ' 외상', xs: flows.map(function (fl) { return fl ? M.foodDiff(nm, fl.months) : null; }) }; });
+var rows = ids.map(function (id) { var nm = _.supName(ctx, id); return { id: id, name: nm, xs: flows.map(function (fl) { return fl ? M.foodDiff(nm, fl.months) : null; }) }; });
 var same = flows.every(function (fl, j) {
 if (!fl) return true;
 var u = useOf(fl, 'supplier');
@@ -4942,15 +4933,22 @@ var nz = function (x) { return !!(x && F.isNum(x.value) && Math.abs(x.value) >= 
 var pop = flowPopOn(ctx), admin = !!(ctx.V && ctx.V.details), T = C.flowLines;
 var nameHtml = function (id, text) { var t = text || (T[id] || { name: id }).name; return pop ? '<button type="button" class="txline" data-flow-line="' + id + '" aria-haspopup="dialog" title="' + U.esc(t) + ' 내역 보기">' + U.esc(t) + '</button>' : U.esc(t); };
 var cell = function (x, masked) { return '<td class="n">' + (masked ? '<span class="muted">가려 둠</span>' : x ? ctx.num(x, 'digits') : '<span class="dash">' + F.DASH + '</span>') + '</td>'; };
-var ids = [], body = '', maskedAny = false, inTotal = [], supOn = false;
+var ids = [], body = '', maskedAny = false, inTotal = [], supOn = false, supSplit = false;
 var line = function (name, xs, masked) { body += '<tr><th scope="row">' + name + '</th>' + xs.map(function (x) { return cell(x, masked); }).join('') + '</tr>'; inTotal.push(xs); };
 flows.forEach(function (fl) { if (fl) fl.uses.forEach(function (u) { if (ids.indexOf(u.id) < 0) ids.push(u.id); }); });
 ids.forEach(function (id) {
 var xs = flows.map(function (fl) { var u = useOf(fl, id); return u ? u.x : null; });
 if (id === 'supplier') {
-var parts = supParts(ctx, flows);
-if (parts) parts.forEach(function (p) { if (p.xs.some(nz)) { line(U.esc(p.name), p.xs, false); supOn = true; } });
-else if (xs.some(nz)) { line(nameHtml('supplier', '거래처 외상'), xs, false); supOn = true; }
+if (!xs.some(nz)) return;
+var parts = supParts(ctx, flows), subs = parts ? parts.filter(function (p) { return p.xs.some(nz); }) : [];
+supOn = true;
+if (!subs.length) { line(nameHtml('supplier', '외상'), xs, false); supSplit = false; return; }
+var open = !!expanded[OUT_SUP];
+line('<button type="button" class="toggle out-toggle" data-toggle="' + OUT_SUP + '" aria-expanded="' + open + '" aria-controls="' + subs.map(function (p) { return OUT_SUP + '-' + p.id; }).join(' ') + '">외상</button>', xs, false);
+subs.forEach(function (p) {
+body += '<tr class="item sub-row" id="' + OUT_SUP + '-' + p.id + '" data-parent="' + OUT_SUP + '"' + (open ? '' : ' hidden') + '><th scope="row">' + U.esc(p.name) + '</th>' + p.xs.map(function (x) { return cell(x, false); }).join('') + '</tr>';
+});
+supSplit = true;
 return;
 }
 if (!xs.some(nz)) return;
@@ -4976,7 +4974,7 @@ var head = '<thead><tr><th scope="col">항목</th>' + colsL.map(function (c) { r
 var note = (M.adjusted ? '영업이익에 넣지 않고 나간 돈이에요(세금 포함) — 합계는 지출 칸의 지출과 같아요.'
 : '영업이익(통장 기준)에 넣지 않고 나간 돈이에요. 통장 그대로 보기라 세금은 영업비용 안에 있고 거래처에 보낸 돈은 식재료비에 들어 있어서 세금·거래처 외상 줄이 없어요.') +
 ' 영업이익 = 이 표의 합계 + ' + leftName + '이에요.' +
-(supOn ? ' 거래처 외상 줄은 명세표로 산 것과 통장으로 보낸 돈의 차이예요(더 보냈으면 숫자 · 덜 보냈으면 −, 명세표가 있는 달만). 외상 잔액이 실제로 얼마나 줄었는지는 부채·외상 화면에 있어요.' : '') +
+(supOn ? ' 외상 줄은 명세표로 산 것과 통장으로 보낸 돈의 차이예요(더 보냈으면 숫자 · 덜 보냈으면 −, 명세표가 있는 달만).' + (supSplit ? ' 외상을 누르면 거래처마다 보여요(합계에는 외상 한 줄만 들어가요).' : '') + ' 외상 잔액이 실제로 얼마나 줄었는지는 부채·외상 화면에 있어요.' : '') +
 (!bankSame && flows.some(function (fl) { return fl && fl.bank; }) ? ' 잔액은 그 기간 통장 잔액 변화와 달라요 — 월세·급여·가족 명의 지출을 그 달 몫으로 옮긴 차이 등(지출 칸 참고 줄).' : '') +
 (f.store !== 'all' ? ' 기타에는 가게 사이 이체도 들어 있어요.' : '') + (maskedAny ? ' 개인 항목은 가렸어요.' : '');
 var noteHtml = ctx.V && ctx.V.quietNotes ? '' : '<p class="note">' + U.esc(note) + '</p>';
@@ -5226,7 +5224,7 @@ rootEl.querySelectorAll('.item[data-parent="' + id + '"]').forEach(function (tr)
 });
 });
 },
-outsidePanel: outsidePanel, supParts: supParts
+outsidePanel: outsidePanel, supParts: supParts, expanded: expanded
 };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 (function (root) {
@@ -5961,13 +5959,14 @@ if (!s.mo) return null;
 var yr = yearly(ctx), data = flowData(ctx, s), hi = flowHi(ctx, s);
 var at = data.map(function (d, i) { return i; }).filter(function (i) { return yr ? hi == null || (i - hi) % 2 === 0 : i === 0 || (i + 1) % 5 === 0; });
 if (!yr && hi != null) at = at.filter(function (i) { return Math.abs(i - hi) > 2; }).concat([hi]).sort(function (a, b) { return a - b; });
-return {
-keys: data.map(function (d) { return d.key; }), labels: data.map(function (d) { return d.label; }), ticks: data.map(function (d) { return d.tick; }), at: at, hi: hi,
-units: data.map(function (d) {
+var units = data.map(function (d) {
 if (!d.end || !isNum(d.start)) return null;
 var buy = some(d.buy) ? d.buy.value : 0, paid = some(d.paid) ? d.paid.value : 0;
-return { start: d.start, buy: buy, paid: paid, gap: d.end.value - (d.start + buy - paid), end: d.end.value };
-}),
+return { start: d.start, buy: buy, paid: paid, end: d.end.value, mark: paid ? 'diamond' : buy ? 'dot' : null };
+});
+return {
+keys: data.map(function (d) { return d.key; }), labels: data.map(function (d) { return d.label; }), ticks: data.map(function (d) { return d.tick; }), at: at, hi: hi, units: units,
+open: units.map(function (u, i) { return u && (!i || !units[i - 1]) ? { at: i, value: u.start } : null; }).filter(Boolean),
 marks: MARKS.map(function (m) { return { name: m.name, mark: m.mark, tone: m.tone }; })
 };
 }
@@ -5994,11 +5993,11 @@ function drawFlow(el, ctx, s) {
 var yr = yearly(ctx), cd = chartData(ctx, s), sums = flowSums(ctx, s, 0);
 var say = function (x) { return some(x) ? F.man(x.value) : '없음'; };
 var known = cd.units.filter(Boolean), a = known[0], b = known[known.length - 1];
-window.Charts.levels(el, {
+window.Charts.balance(el, {
 labels: cd.labels, tickLabels: cd.ticks, units: cd.units, names: { buy: MARKS[0].name, paid: MARKS[1].name, end: '끝 외상' }, buyTone: MARKS[0].tone, paidTone: MARKS[1].tone,
 format: F.man, tickFormat: F.tick, height: 240, xAt: cd.at, hi: cd.hi, empty: '없음',
-ariaLabel: NAME(ctx, s.id) + ' ' + sums.period + (yr ? ' 달마다' : ' 날마다') + ' 외상 잔액 계단 그래프' + (a ? ': ' + F.man(a.start) + '에서 ' + L.josa(F.man(b.end), '으로/로') : '') +
-'. 매입(먹색, 올라가는 선) ' + say(sums.buy) + ', 입금(파랑, 내려가는 선) ' + say(sums.paid) + '.'
+ariaLabel: NAME(ctx, s.id) + ' ' + sums.period + (yr ? ' 달마다' : ' 날마다') + ' 외상 잔액 꺾은선 그래프' + (a ? ': ' + F.man(a.start) + '에서 ' + L.josa(F.man(b.end), '으로/로') : '') +
+'. 매입 있는 ' + (yr ? '달' : '날') + ' 먹색 동그라미(매입 ' + say(sums.buy) + '), 입금한 ' + (yr ? '달' : '날') + ' 파란 마름모(입금 ' + say(sums.paid) + ').'
 });
 }
 function swipeOn(cal, ctx, s) {
@@ -6171,7 +6170,7 @@ rootEl.querySelectorAll('[data-sup-span]').forEach(function (b) {
 b.addEventListener('click', function () { if (ctx.keep) ctx.keep(b); go(ctx, { chart: b.getAttribute('data-sup-span') === 'y' ? 'y' : null }); });
 });
 var el = rootEl.querySelector('#sup-flow');
-if (el && window.Charts && window.Charts.levels) drawFlow(el, ctx, s);
+if (el && window.Charts && window.Charts.balance) drawFlow(el, ctx, s);
 }
 var cal = ctx.V && ctx.V.supSwipe ? rootEl.querySelector('.cal[data-swipe]') : null;
 if (cal && s.months.length > 1) swipeOn(cal, ctx, s);

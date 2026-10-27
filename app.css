@@ -270,6 +270,10 @@ tr.muted td, tr.muted th { color: var(--muted); }
 .out-table tr.sub-row td { font-size: var(--fs-small); color: var(--muted); }
 .out-table tr.total th, .out-table tr.total td { font-weight: 600; border-top: 1px solid var(--border); }
 .out-table tr.left th, .out-table tr.left td { font-weight: 600; }
+.out-table .toggle { display: inline-flex; align-items: center; gap: 7px; margin: -10px 0; padding: 10px 12px 10px 0; border: 0; background: none; cursor: pointer; font: inherit; color: inherit; text-align: left; }
+.out-table .toggle::after { content: ""; flex: none; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform var(--t-ui) var(--ease-out); }
+.out-table .toggle[aria-expanded="true"]::after { transform: rotate(45deg); }
+.out-table .toggle:hover { text-decoration: underline; text-underline-offset: 3px; }
 .pnl-table tr.item td { color: var(--muted); font-size: 14px; }
 .pnl-table tr.item td:first-child { padding-left: 16px; }
 .pnl-table .toggle { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; cursor: pointer; font: inherit; color: inherit; min-height: 28px; }
