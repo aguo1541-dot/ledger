@@ -1,4 +1,4 @@
-window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-26T12:31:30.949Z' };
+window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-27T01:34:04.373Z' };
 
 (function (root, factory) {
 var api = factory();
@@ -904,7 +904,7 @@ owner: { label: '사장님용', nav: ['pnl', 'debts', 'sup'], home: 'pnl', share
 terms: { debts: '부채', debtsTotal: '부채 합계', debtsAll: '부채 전체', payPerMonth: '한 달에 갚을 금액' },
 debtTable: { kids: false, source: false, unknownNote: false, hideEmpty: ['loan', 'etc'], payoff: false },
 subShare: true, debtChart: { cols: ['nain', 'taejo', 'hyunjin'] }, plain: true, flowPop: false, plainFlow: true, kpis: ['revenue', 'op_profit', 'op_margin'], kpiLabels: { revenue: '입금' }, flowBarsOnly: true,
-supChart: true, supSwipe: true, stamp: 'stmt', outside: { supRows: ['nain', 'taejo', 'hyunjin', 'bethel'] },
+supChart: true, supSwipe: true, stamp: 'stmt', outside: { supRows: ['nain', 'taejo', 'hyunjin', 'bethel'], mergeLeft: true },
 pnlTable: { revShare: false, slimLabel: true, labels: { rent_fixed: '고정비', delivery_fees: '배달', op_cost: '비용 합계' } } },
 admin: { label: '관리용', nav: ['overview', 'debts', 'sup', 'price', 'pnl', 'util', 'review', 'data'], home: 'overview', reasons: true, notes: true, multiPeriod: true, details: true, drill: true, bankToggle: true,
 terms: {}, debtTable: { kids: true, source: true, unknownNote: true, hideEmpty: [] }, debtChart: { cols: ['nain', 'taejo', 'hyunjin'] }, inbox: true, taxPays: true,
@@ -4908,6 +4908,7 @@ return _.panel('c6 mix', '매출 구성', U.esc(periodLabel(ctx)) + ' · ' + U.e
 }
 var OUT_PERSONAL = ['kiwoom', 'owner_transfer', 'family_transfer', 'personal_out', 'personal_tax'];
 var OUT_SUP = 'out-sup';
+var OUT_SUM = 'out-sum';
 function outCfg(ctx) { return (ctx.V && ctx.V.outside) || {}; }
 function useOf(fl, id) { return fl ? fl.uses.filter(function (u) { return u.id === id; })[0] || null : null; }
 function supParts(ctx, flows) {
@@ -4922,7 +4923,7 @@ return !!u && F.isNum(u.x.value) && Math.abs(rows.reduce(function (a, r) { retur
 return same ? rows : null;
 }
 function outsidePanel(ctx) {
-var M = ctx.M, f = ctx.f, hide = ctx.prefs.hidePersonal, dc = (L.viewConfig || {}).FLOW_DEBT_COLS || [];
+var M = ctx.M, f = ctx.f, hide = ctx.prefs.hidePersonal, dc = (L.viewConfig || {}).FLOW_DEBT_COLS || [], OC = outCfg(ctx);
 if (!M.cashFlow) return '';
 var y = yearOf(ctx), opt = flowOpts(ctx);
 var colsL = f.multi ? [{ label: '고른 기간', months: f.period }] : f.annual ? [{ label: y + '년', months: M.yearMonths(f.store, y) }]
@@ -4966,10 +4967,26 @@ var xs = inTotal.map(function (r) { return r[j]; }).filter(function (x) { return
 var s = xs.reduce(function (a, x) { return a + x.value; }, 0);
 return xs.length && F.isNum(fl.usedTotal.value) && Math.abs(s - fl.usedTotal.value) < 0.5 ? { value: s, v: xs.map(function (x) { return '(' + x.v + ')'; }).join(' + ') } : fl.usedTotal;
 };
-body += '<tr class="total"><th scope="row">합계</th>' + flows.map(function (fl, j) { return cell(totalOf(fl, j), maskedAny); }).join('') + '</tr>';
 var bankSame = flows.every(function (fl) { return !fl || (fl.bank && F.isNum(fl.diff.value) && Math.abs(fl.diff.value) < 0.5); });
 var leftName = bankSame ? '통장에 남은 돈' : '잔액';
+if (OC.mergeLeft) {
+var openSum = !!expanded[OUT_SUM], calcIds = ['used', 'left', 'earned'];
+var sumOf = function (fl, j) {
+var t = totalOf(fl, j);
+return !fl ? null : t && F.isNum(t.value) && t.v && F.isNum(fl.left.value) && fl.left.v ? { value: t.value + fl.left.value, v: '(' + t.v + ') + (' + fl.left.v + ')' } : fl.earned;
+};
+body += '<tr class="total"><th scope="row"><button type="button" class="toggle out-toggle" data-toggle="' + OUT_SUM + '" aria-expanded="' + openSum + '" aria-controls="' + calcIds.map(function (k) { return OUT_SUM + '-' + k; }).join(' ') + '">합계</button></th>' +
+flows.map(function (fl, j) { return cell(sumOf(fl, j), maskedAny); }).join('') + '</tr>';
+var calc = function (k, name, pick) {
+body += '<tr class="item sub-row" id="' + OUT_SUM + '-' + k + '" data-parent="' + OUT_SUM + '"' + (openSum ? '' : ' hidden') + '><th scope="row">' + U.esc(name) + '</th>' + flows.map(function (fl, j) { return cell(fl ? pick(fl, j) : null, maskedAny); }).join('') + '</tr>';
+};
+calc('used', '손익 밖 지출', function (fl, j) { return totalOf(fl, j); });
+calc('left', '+ ' + leftName, function (fl) { return fl.left; });
+calc('earned', '= 영업이익', function (fl) { return fl.earned; });
+} else {
+body += '<tr class="total"><th scope="row">합계</th>' + flows.map(function (fl, j) { return cell(totalOf(fl, j), maskedAny); }).join('') + '</tr>';
 body += '<tr class="left"><th scope="row">' + leftName + '</th>' + flows.map(function (fl) { return cell(fl ? fl.left : null, maskedAny); }).join('') + '</tr>';
+}
 var head = '<thead><tr><th scope="col">항목</th>' + colsL.map(function (c) { return '<th class="n" scope="col">' + U.esc(c.label) + '(원)</th>'; }).join('') + '</tr></thead>';
 var note = (M.adjusted ? '영업이익에 넣지 않고 나간 돈이에요(세금 포함) — 합계는 지출 칸의 지출과 같아요.'
 : '영업이익(통장 기준)에 넣지 않고 나간 돈이에요. 통장 그대로 보기라 세금은 영업비용 안에 있고 거래처에 보낸 돈은 식재료비에 들어 있어서 세금·거래처 외상 줄이 없어요.') +
