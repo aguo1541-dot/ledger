@@ -1,4 +1,4 @@
-window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-27T01:34:04.373Z' };
+window.__LEDGER_BUILD__ = { mode: 'web', view: 'owner', built: '2026-10-29T08:45:37.842Z' };
 
 (function (root, factory) {
 var api = factory();
@@ -50,9 +50,9 @@ var EXT_TABLES = [
 { name: 'ext_util_bills', snap: 'utilBills', id: ['place', 'item', 'month'], cols: cols('place:text item:text month:month n:int amount:won billed:won arrears:won n_bank:int n_auto:int n_check:int n_unpaid:int n_hold:int due:date issued:date autopay:text paid_n:int hl_n:int hl_billed:won hl_due:date hl_autopay:text') },
 { name: 'ext_notes', snap: 'notes', id: ['id'], cols: cols('id:text scope:text period:text store:text kind:text text:text') },
 { name: 'ext_tax_monthly', snap: 'taxMonthly', id: ['month', 'store'], cols: cols('month:month store:text remaining:won n:int') },
-{ name: 'ext_tax_liab', snap: 'taxLiab', id: ['id'], cols: cols('id:text store:text kind:text period:text start:month final:won paid:won last_paid:date n_pay:int assumed:int') },
+{ name: 'ext_tax_liab', snap: 'taxLiab', id: ['id'], cols: cols('id:text store:text kind:text period:text start:month final:won paid:won last_paid:date n_pay:int assumed:int unbilled:int') },
 { name: 'ext_bank_monthly', snap: 'bankMonthly', id: ['month', 'store'], cols: cols('month:month store:text open:won close:won n:int other:half xfer:half loan_p:half kw_o:half kw_f:half tax_x:half ptax:half bc:won bc_n:int') },
-{ name: 'ext_pnl_adj', snap: 'pnlAdj', id: ['month', 'store'], cols: cols('month:month store:text food:half labor:half rent_fixed:half opex:half taxes:half op_cost:half op_profit:half d_food:half d_labor:half d_rent:half d_family:half') },
+{ name: 'ext_pnl_adj', snap: 'pnlAdj', id: ['month', 'store'], cols: cols('month:month store:text food:half labor:half rent_fixed:half opex:half taxes:half op_cost:half op_profit:half d_food:half d_labor:half d_rent:half d_family:half revenue:half rev_card:half income_total:half d_revenue:half d_tax_x:half d_held:half vat:half vat_est:half vat_paid:half tax_other:half') },
 { name: 'ext_food_basis', snap: 'foodBasis', id: ['month', 'supplier'], cols: cols('month:month supplier:text basis:text buy:half paid:half') },
 { name: 'ext_tax_paid', snap: 'taxPaid', id: ['month', 'store', 'kind'], cols: cols('month:month store:text kind:text amount:half') },
 { name: 'ext_tax_pays', snap: 'taxPays', id: ['date', 'store', 'seq'], cols: cols('date:date store:text seq:int kind:text amount:won') },
@@ -77,7 +77,8 @@ var ITEM_META_TYPES = { schema: 'int', from: 'date', to: 'date', nain_docs: 'int
 var EXT_META_TYPES = { schema: 'int', util_cutoff: 'date', bank_asof: 'date', bills_source: 'text', bills_rows: 'int', bills_last: 'date', notes_source: 'text', notes_count: 'int', notes_updated: 'datetime',
 bills_held: 'int', bills_matched: 'int', bills_skipped: 'int' };
 var TAX_META_TYPES = { schema: 'int', snap_date: 'date', first_month: 'month', check_ok: 'flag', got_all: 'won', want_all: 'won', got_2ho: 'won', want_2ho: 'won', got_eungam: 'won', want_eungam: 'won',
-assumed_n: 'int', assumed_amount: 'won', payments: 'int', liabilities: 'int', skipped_local: 'int', skipped_other: 'int' };
+assumed_n: 'int', assumed_amount: 'won', payments: 'int', liabilities: 'int', skipped_local: 'int', skipped_other: 'int',
+full: 'flag', unbilled_2ho: 'won', unbilled_eungam: 'won', hometax_2ho: 'won', hometax_eungam: 'won', hometax_all: 'won' };
 var BANK_META_TYPES = { schema: 'int', first_month: 'month', last_month: 'month', rows: 'int', breaks_2ho: 'int', breaks_eungam: 'int', ok: 'flag' };
 var ADJ_META_TYPES = { schema: 'int', first_month: 'month', last_month: 'month', moves_labor: 'int', moves_rent: 'int', refunds: 'int', family_quarters: 'int', food_stmt_months: 'int', food_bank_months: 'int', fills_used: 'int',
 half_rows: 'int', half_rows_h: 'int', half_excel: 'flag', ok: 'flag' };
@@ -450,10 +451,13 @@ t.k.forEach(function (k, i) {
 if (!Array.isArray(k) || (k.length !== 5 && k.length !== 6) || k.some(function (x) { return typeof x !== 'string'; })) out.push('분류 ' + i + ' 모양');
 else k.forEach(function (x) { if (scanPrivacy(x).length) out.push('분류 ' + i + ' 개인정보 같은 숫자'); });
 });
-t.r.forEach(function (r, i) {
-if (!Array.isArray(r) || r.length !== 5 || !(isNum(r[0]) && r[0] >= 1 && r[0] <= 31) || typeof r[1] !== 'string' || !isNum(r[2]) || !(isNum(r[3]) && r[3] >= 0 && r[3] < t.k.length) || ['a', 'b', 'h'].indexOf(r[4]) < 0) out.push('거래 ' + i + ' 모양');
-else if (scanPrivacy(r[1]).length) out.push('거래 ' + i + ' 이름에 개인정보 같은 숫자');
-});
+var row = function (r, i, what) {
+if (!Array.isArray(r) || (r.length !== 5 && r.length !== 6) || !(isNum(r[0]) && r[0] >= 1 && r[0] <= 31) || typeof r[1] !== 'string' || !isNum(r[2]) || !(isNum(r[3]) && r[3] >= 0 && r[3] < t.k.length) || ['a', 'b', 'h'].indexOf(r[4]) < 0 ||
+(r.length === 6 && (key !== 'txm' || ['v', 'w', 'c', 'l'].indexOf(r[5]) < 0 || (t.k[r[3]] || [])[4] !== 'taxes'))) out.push(what + ' ' + i + ' 모양');
+else if (scanPrivacy(r[1]).length) out.push(what + ' ' + i + ' 이름에 개인정보 같은 숫자');
+};
+t.r.forEach(function (r, i) { row(r, i, '거래'); });
+if (t.ob != null) { if (!Array.isArray(t.ob)) out.push('통장 밖 줄 모양'); else t.ob.forEach(function (r, i) { row(r, i, '통장 밖 줄'); }); }
 return out;
 }
 function validateExt(snap, err, warn) {
@@ -909,7 +913,8 @@ pnlTable: { revShare: false, slimLabel: true, labels: { rent_fixed: '고정비',
 admin: { label: '관리용', nav: ['overview', 'debts', 'sup', 'price', 'pnl', 'util', 'review', 'data'], home: 'overview', reasons: true, notes: true, multiPeriod: true, details: true, drill: true, bankToggle: true,
 terms: {}, debtTable: { kids: true, source: true, unknownNote: true, hideEmpty: [] }, debtChart: { cols: ['nain', 'taejo', 'hyunjin'] }, inbox: true, taxPays: true,
 reviewTodo: true,
-outside: { supRows: ['nain', 'taejo', 'hyunjin', 'bethel'] } }
+outside: { supRows: ['nain', 'taejo', 'hyunjin', 'bethel'] },
+supEst: ['hyunjin', 'taejo'] }
 },
 DEBT_EXCLUDE: [{ id: 'bethel', why: '작은 외상' }],
 DEBT_MARKS: { months: ['2023-02'], bands: true },
@@ -1090,11 +1095,17 @@ income_total: '수입 합계', food: '식재료', labor: '인건비', rent_fixed
 delivery_fees: '배달 수수료', taxes: '세금', opex: '기타 운영비', review: '확인 중', op_cost: '영업비용',
 op_profit: '영업이익', op_margin: '이익률', finance_out: '대출·금융', owner_transfer: '대표자 이체',
 family_transfer: '가족 이체', internal_net: '가게 간 이동', food_accrual: '식재료(명세표 기준)',
-op_profit_accrual: '영업이익(명세표 기준)', food_ratio: '식재료 원가율', labor_ratio: '인건비율'
+op_profit_accrual: '영업이익(명세표 기준)', food_ratio: '식재료 원가율', labor_ratio: '인건비율',
+vat: '부가세'
 },
 flowLines: {
 taxes: { name: '세금(평소 부가세)', sub: '그때그때 내는 부가세·지방세 등 — 손익(영업비용)에서는 뺐어요', bar: ['세금'] },
 tax_arrears: { name: '밀린 세금 정리', sub: '평소보다 더 낸 세금(밀린 부가세 등을 한꺼번에) — 남은 세금이 그만큼 줄었어요', bar: ['밀린', '세금'] },
+vat_diff: { name: '밀린 부가세', sub: '낸 부가세 − 이번 몫(분기 부가세를 석 달에 나눈 것) — 더 냈으면 밀린 것·가산세를 갚은 돈, 덜 냈으면 −', bar: ['밀린', '부가세'] },
+vat_more: { name: '밀린 부가세 갚음', sub: '이번 몫보다 더 낸 부가세 — 밀린 부가세·가산세를 갚았어요', bar: ['부가세', '갚음'] },
+vat_less: { name: '부가세 밀림', sub: '이번 몫 중 아직 안 낸 부가세 — 그만큼 통장에 남아 있어요', bar: ['부가세', '밀림'] },
+tax_other: { name: '그 외 세금', sub: '원천세(직원 급여에서 뗀 세금)·지방세 등', bar: ['그 외', '세금'] },
+bc_held: { name: 'BC카드에 남은 돈', sub: '판 돈인데 BC카드가 아직 안 준 돈 — 매출에는 판 달에 넣었어요(세무서로 가거나 통장으로 들어와요)', bar: ['BC', '남은 돈'] },
 loan: { name: '대출금', sub: '대출 원금·이자 등', bar: ['대출금'] },
 loan_personal: { name: '대출금 (개인)', sub: '대표자 명의로 갚은 대출', bar: ['대출금', '(개인)'] },
 personal_tax: { name: '개인 세금', sub: '대표자 이름으로 낸 개인 세금(국고·금고·대표자 계좌로) — 가게 비용 아니에요', bar: ['개인', '세금'] },
@@ -1256,19 +1267,22 @@ var asOf = meta.data_as_of || null, asOfMonth = asOf ? String(asOf).slice(0, 7) 
 var monthly = snap.monthly || [], byMS = {}, storeLabels = {};
 monthly.forEach(function (r) { (byMS[r.month] = byMS[r.month] || {})[r.store] = r; if (r.store_label && !storeLabels[r.store]) storeLabels[r.store] = r.store_label; });
 var ADJ_COLS = ['food', 'labor', 'rent_fixed', 'opex', 'op_cost', 'op_profit'];
+var ADJ_OPT = ['revenue', 'rev_card', 'income_total', 'vat'];
 var adjBy = {}; (snap.pnlAdj || []).forEach(function (r) { adjBy[r.month + '/' + r.store] = r; });
 var adjOn = !!(snap.pnlAdj && snap.pnlAdj.length) && opts.basis !== 'bank';
+var vatOn = adjOn && (snap.pnlAdj || []).some(function (r) { return isNum(r.vat); });
 if (adjOn) Object.keys(byMS).forEach(function (m) {
 Object.keys(byMS[m]).forEach(function (st) {
 var a = adjBy[m + '/' + st], r = byMS[m][st];
 if (!a || !r || !r.has_data) return;
-var o = Object.assign({}, r); ADJ_COLS.forEach(function (c) { o[c] = a[c]; }); o._adj = true;
+var o = Object.assign({}, r); ADJ_COLS.forEach(function (c) { o[c] = a[c]; }); ADJ_OPT.forEach(function (c) { if (isNum(a[c])) o[c] = a[c]; }); o._adj = true;
 byMS[m][st] = o;
 });
 });
-var COSTS = adjOn ? SHOWN_COSTS.filter(function (c) { return c.id !== 'taxes'; }) : SHOWN_COSTS;
-var DRIVERS_I = adjOn ? DRIVERS.filter(function (d) { return d.id !== 'taxes'; }) : DRIVERS;
-function adjCol(month, store, col) { return adjOn && ADJ_COLS.indexOf(col) >= 0 && !!adjBy[month + '/' + store]; }
+var VAT_COST = { id: 'vat', major: '부가세', majors: ['부가세'], cols: ['vat'], extra: [] };
+var COSTS = adjOn ? (vatOn ? SHOWN_COSTS.map(function (c) { return c.id === 'taxes' ? VAT_COST : c; }) : SHOWN_COSTS.filter(function (c) { return c.id !== 'taxes'; })) : SHOWN_COSTS;
+var DRIVERS_I = adjOn ? (vatOn ? DRIVERS.map(function (d) { return d.id === 'taxes' ? { id: 'vat', sign: -1, cols: ['vat'] } : d; }) : DRIVERS.filter(function (d) { return d.id !== 'taxes'; })) : DRIVERS;
+function adjCol(month, store, col) { var a = adjOn ? adjBy[month + '/' + store] : null; return !!a && (ADJ_COLS.indexOf(col) >= 0 || (ADJ_OPT.indexOf(col) >= 0 && isNum(a[col]))); }
 var allMonths = Object.keys(byMS).sort();
 var dm = {}; (snap.debtMonthly || []).forEach(function (r) { dm[r.month] = r; });
 var dmMonths = Object.keys(dm).sort();
@@ -1381,31 +1395,34 @@ function excludedId(id) { var top = String(id).split('.')[0]; return EXCL_IDS.in
 var LEAF = (S.DEBT_LEAF || ['nain', 'taejo', 'hyunjin', 'bethel', 'other_ap', 'tax_2ho', 'tax_eungam', 'utility_unpaid', 'loan_corp', 'loan_other']).filter(function (c) { return EXCL_IDS.indexOf(c) < 0; });
 var TAX_COLS = { tax_2ho: '2ho', tax_eungam: 'eungam' };
 var taxM = {}; (snap.taxMonthly || []).forEach(function (r) { taxM[r.month + '/' + r.store] = r; });
+var taxFull = !!(snap.taxMeta && snap.taxMeta.full === true);
 function taxFill(month, col) {
 var st = TAX_COLS[col], r = dm[month];
-if (!st || !debtMonth || !(month < debtMonth) || !r || !isNum(r.all_total) || isNum(r[col])) return null;
+if (!st || !debtMonth || !r || !isNum(r.all_total)) return null;
+if (taxFull ? month > debtMonth : (!(month < debtMonth) || isNum(r[col]))) return null;
 var t = taxM[month + '/' + st]; return t && isNum(t.remaining) ? t : null;
 }
-function dmv(month, col) { var r = dm[month]; if (r && isNum(r[col])) return r[col]; var t = taxFill(month, col); return t ? t.remaining : null; }
+function dmv(month, col) { var t = taxFill(month, col); if (t) return t.remaining; var r = dm[month]; return r && isNum(r[col]) ? r[col] : null; }
 function dmPath(month, col) { return taxFill(month, col) ? 'taxMonthly[' + month + '/' + TAX_COLS[col] + '].remaining' : 'debtMonthly[' + month + '].' + col; }
 function taxPeriods() {
 var meta = snap.taxMeta, rows = snap.taxMonthly || [];
 if (!meta || !rows.length) return null;
 var months = Array.from(new Set(rows.map(function (r) { return r.month; }))).sort();
 var filled = months.filter(function (m) { return taxFill(m, 'tax_2ho') || taxFill(m, 'tax_eungam'); });
-var diffs = [];
+var diffs = [], sm = meta.snap_date ? String(meta.snap_date).slice(0, 7) : null;
+var unb = { '2ho': taxFull && isNum(meta.unbilled_2ho) ? meta.unbilled_2ho : 0, eungam: taxFull && isNum(meta.unbilled_eungam) ? meta.unbilled_eungam : 0 };
 months.forEach(function (m) {
 var r = dm[m]; if (!r) return;
 Object.keys(TAX_COLS).forEach(function (c) {
-var t = taxM[m + '/' + TAX_COLS[c]];
-if (isNum(r[c]) && t && isNum(t.remaining) && r[c] !== t.remaining) diffs.push({ month: m, col: c, store: TAX_COLS[c], excel: val(r[c], 'debtMonthly[' + m + '].' + c), calc: val(t.remaining, 'taxMonthly[' + m + '/' + TAX_COLS[c] + '].remaining') });
+var t = taxM[m + '/' + TAX_COLS[c]], want = t && isNum(t.remaining) ? t.remaining - (m === sm ? unb[TAX_COLS[c]] : 0) : null;
+if (isNum(r[c]) && t && isNum(t.remaining) && r[c] !== want) diffs.push({ month: m, col: c, store: TAX_COLS[c], excel: val(r[c], 'debtMonthly[' + m + '].' + c), calc: val(t.remaining, 'taxMonthly[' + m + '/' + TAX_COLS[c] + '].remaining') });
 });
 });
-var sm = meta.snap_date ? String(meta.snap_date).slice(0, 7) : null;
 var got = sm ? { value: rows.filter(function (r) { return r.month === sm; }).reduce(function (a, r) { return a + (r.remaining || 0); }, 0), v: 'sum(taxMonthly[' + sm + '/*].remaining)' } : val(null, null);
 return { first: meta.first_month || months[0], months: months, filled: filled, snapDate: meta.snap_date || null, snapMonth: sm, ok: meta.check_ok === true && !diffs.length,
 checkOk: meta.check_ok === true, got: got, want: isNum(meta.want_all) ? { value: meta.want_all, v: 'ui:taxWant' } : val(null, null), diffs: diffs,
-assumed: { n: meta.assumed_n || 0, amount: meta.assumed_amount || 0 }, liab: (snap.taxLiab || []).slice() };
+assumed: { n: meta.assumed_n || 0, amount: meta.assumed_amount || 0 }, liab: (snap.taxLiab || []).slice(),
+full: taxFull, unbilled: val(taxFull ? unb['2ho'] + unb.eungam : 0, 'ui:taxUnbilled'), hometax: isNum(meta.hometax_all) ? val(meta.hometax_all, 'ui:taxHometax') : val(null, null) };
 }
 function debtCell(month, col) { var x = dmv(month, col); return val(x, x == null ? null : dmPath(month, col)); }
 function colName(col) {
@@ -1447,50 +1464,60 @@ if (first && first !== actual[0] && !isNum(dmv(actual[0], c))) out.push({ col: c
 return out;
 }
 function kidsOf(id) { return debts.filter(function (d) { return String(d.debt_id).indexOf(id + '.') === 0; }); }
-function noHistory(d) { return !!(d && d.start_date && d.current_date && d.start_date >= d.current_date); }
+function taxLed(d) { return !!(taxFull && d && TAX_COLS[d.debt_id] && debtMonth && taxFill(debtMonth, d.debt_id)); }
+function balOf(d) { return taxLed(d) ? dmv(debtMonth, d.debt_id) : d.current_balance; }
+function balPath(d) { return taxLed(d) ? dmPath(debtMonth, d.debt_id) : 'debts[' + d.debt_id + '].current_balance'; }
+function ledStart(d) { if (!taxLed(d)) return null; return dmMonths.filter(function (m) { return !!taxFill(m, d.debt_id); })[0] || null; }
+function monthEnd(m) { var dd = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate(); return m + '-' + (dd < 10 ? '0' : '') + dd; }
+function startOf(d) { var m0 = ledStart(d); return m0 ? dmv(m0, d.debt_id) : d.start_balance; }
+function startPath(d) { var m0 = ledStart(d); return m0 ? dmPath(m0, d.debt_id) : 'debts[' + d.debt_id + '].start_balance'; }
+function startDateOf(d) { var m0 = ledStart(d); return m0 ? monthEnd(m0) : d.start_date; }
+function curDateOf(d) { return taxLed(d) ? (snap.taxMeta.snap_date || d.current_date) : d.current_date; }
+function srcOf(d) { return taxLed(d) ? '홈택스 납부내역·남은 세금' : d.confirmed_source; }
+function noHistory(d) { if (taxLed(d)) return false; return !!(d && d.start_date && d.current_date && d.start_date >= d.current_date); }
 function single(d) {
-var id = d.debt_id, cur = d.current_balance, hasCol = S.DEBT_COLUMNS.indexOf(id) >= 0;
+var id = d.debt_id, cur = balOf(d), hasCol = S.DEBT_COLUMNS.indexOf(id) >= 0;
 var prev = hasCol ? dmv(prevDebtMonth, id) : null;
 var change = isNum(cur) && isNum(prev) ? cur - prev : null;
 return {
 id: id, label: d.name, kind: d.kind, unknown: !isNum(cur), debts: [d], unknownMembers: [],
-current: val(cur, 'debts[' + id + '].current_balance'),
+current: val(cur, balPath(d)),
 prev: val(prev, hasCol && isNum(prev) ? dmPath(prevDebtMonth, id) : null),
-change: val(change, change == null ? null : 'debts[' + id + '].current_balance - ' + dmPath(prevDebtMonth, id)),
-start: val(d.start_balance, 'debts[' + id + '].start_balance'), startDate: d.start_date, noHistory: noHistory(d),
+change: val(change, change == null ? null : balPath(d) + ' - ' + dmPath(prevDebtMonth, id)),
+start: val(startOf(d), startPath(d)), startDate: startDateOf(d), noHistory: noHistory(d),
 avg3: val(d.avg_net_paydown_3m, 'debts[' + id + '].avg_net_paydown_3m'),
 payoff: val(d.payoff_month || null, 'debts[' + id + '].payoff_month'),
-status: d.status, source: d.confirmed_source, confirmedDate: d.confirmed_date, currentDate: d.current_date,
+status: d.status, source: srcOf(d), confirmedDate: d.confirmed_date, currentDate: curDateOf(d),
 children: kidsOf(id).map(function (k) { return { id: k.debt_id, label: storeLabel(k.store), value: val(k.current_balance, 'debts[' + k.debt_id + '].current_balance') }; })
 };
 }
 function group(id, label, list, childLabel) {
-var known = list.filter(function (d) { return isNum(d.current_balance); });
-var cur = sumVals(known.map(function (d) { return d.current_balance; }));
+var known = list.filter(function (d) { return isNum(balOf(d)); });
+var cur = sumVals(known.map(function (d) { return balOf(d); }));
 var paired = known.filter(function (d) { return S.DEBT_COLUMNS.indexOf(d.debt_id) >= 0 && isNum(dmv(prevDebtMonth, d.debt_id)); });
-var pairedCur = sumVals(paired.map(function (d) { return d.current_balance; })), prev = sumVals(paired.map(function (d) { return dmv(prevDebtMonth, d.debt_id); }));
-var curV = plus(known.map(function (d) { return 'debts[' + d.debt_id + '].current_balance'; }));
-var pairedV = plus(paired.map(function (d) { return 'debts[' + d.debt_id + '].current_balance'; }));
+var pairedCur = sumVals(paired.map(function (d) { return balOf(d); })), prev = sumVals(paired.map(function (d) { return dmv(prevDebtMonth, d.debt_id); }));
+var curV = plus(known.map(function (d) { return balPath(d); }));
+var pairedV = plus(paired.map(function (d) { return balPath(d); }));
 var prevV = plus(paired.map(function (d) { return dmPath(prevDebtMonth, d.debt_id); }));
 var change = paired.length && isNum(pairedCur) && isNum(prev) ? pairedCur - prev : null;
 var avgList = list.filter(function (d) { return isNum(d.avg_net_paydown_3m); });
 var avg = sumVals(avgList.map(function (d) { return d.avg_net_paydown_3m; }));
 var payoff = isNum(cur) && isNum(avg) && avg > 0 && cur > 0 ? addMonths(debtMonth, Math.ceil(cur / avg)) : null;
-var unknownMembers = list.filter(function (d) { return !isNum(d.current_balance); });
-var startList = list.filter(function (d) { return isNum(d.start_balance); });
+var unknownMembers = list.filter(function (d) { return !isNum(balOf(d)); });
+var startList = list.filter(function (d) { return isNum(startOf(d)); });
 return {
 id: id, label: label, kind: list[0].kind, unknown: !isNum(cur), debts: list, isGroup: true, unknownMembers: unknownMembers,
 current: val(cur, curV || null), prev: val(prev, prevV || null), change: val(change, change == null ? null : '(' + pairedV + ') - (' + prevV + ')'),
-start: val(sumVals(startList.map(function (d) { return d.start_balance; })), plus(startList.map(function (d) { return 'debts[' + d.debt_id + '].start_balance'; })) || null),
-startDate: list.map(function (d) { return d.start_date; }).filter(Boolean).sort()[0] || null,
-noHistory: (function () { var live = list.filter(function (d) { return isNum(d.current_balance) && d.current_balance !== 0; }); return live.length > 0 && live.every(noHistory); })(),
+start: val(sumVals(startList.map(function (d) { return startOf(d); })), plus(startList.map(function (d) { return startPath(d); })) || null),
+startDate: list.map(function (d) { return startDateOf(d); }).filter(Boolean).sort()[0] || null,
+noHistory: (function () { var live = list.filter(function (d) { return isNum(balOf(d)) && balOf(d) !== 0; }); return live.length > 0 && live.every(noHistory); })(),
 avg3: val(avg, avgList.length ? plus(avgList.map(function (d) { return 'debts[' + d.debt_id + '].avg_net_paydown_3m'; })) : null),
 payoff: val(payoff, payoff ? 'calc:groupPayoff:' + id : null),
 status: unknownMembers.length ? '확인 필요' : change == null ? null : change < 0 ? '줄어드는 중' : change > 0 ? '늘어나는 중' : '줄지 않는 중',
-source: Array.from(new Set(list.map(function (d) { return d.confirmed_source; }).filter(Boolean))).join(' · '),
+source: Array.from(new Set(list.map(function (d) { return srcOf(d); }).filter(Boolean))).join(' · '),
 confirmedDate: list.map(function (d) { return d.confirmed_date; }).filter(Boolean).sort().pop() || null,
-currentDate: list.map(function (d) { return d.current_date; }).filter(Boolean).sort().pop() || null,
-children: list.map(function (d) { return { id: d.debt_id, label: childLabel ? childLabel(d) : d.name, unknown: !isNum(d.current_balance), value: val(d.current_balance, 'debts[' + d.debt_id + '].current_balance') }; })
+currentDate: list.map(function (d) { return curDateOf(d); }).filter(Boolean).sort().pop() || null,
+children: list.map(function (d) { return { id: d.debt_id, label: childLabel ? childLabel(d) : d.name, unknown: !isNum(balOf(d)), value: val(balOf(d), balPath(d)) }; })
 };
 }
 function debtGroups() {
@@ -1652,6 +1679,12 @@ function pnlTable(store, year) {
 var ms = []; for (var k = 1; k <= 12; k++) ms.push(ym(year, k));
 var adjFull = ms.every(function (m) { return !hasData(m, store) || !!adjBy[m + '/' + store]; });
 var yr = function (col) {
+if (ADJ_OPT.indexOf(col) >= 0) {
+var dms = ms.filter(function (m) { return hasData(m, store); }), on = dms.filter(function (m) { return adjCol(m, store, col); });
+if (!on.length) return 'sum(monthly[' + year + '-*/' + store + '].' + col + ')';
+if (on.length === dms.length) return 'sum(pnlAdj[' + year + '-*/' + store + '].' + col + ')';
+return '(' + plus(dms.map(function (m) { return mv(m, store, col); })) + ')';
+}
 if (!(adjOn && ADJ_COLS.indexOf(col) >= 0)) return 'sum(monthly[' + year + '-*/' + store + '].' + col + ')';
 if (adjFull) return 'sum(pnlAdj[' + year + '-*/' + store + '].' + col + ')';
 return plus(ms.filter(function (m) { return hasData(m, store); }).map(function (m) { return mv(m, store, col); })) || 'ui:noData';
@@ -1741,7 +1774,7 @@ var have = list.filter(function (x) { return x && isNum(x.value) && x.v; });
 return val(have.length ? sumVals(have.map(function (x) { return x.value; })) : null, have.length ? have.map(function (x) { return '(' + x.v + ')'; }).join(' + ') : null);
 }
 function subV(a, b) { return isNum(a.value) && isNum(b.value) && a.v && b.v ? val(a.value - b.value, '(' + a.v + ') - (' + b.v + ')') : a; }
-var FLOW_USES = ['taxes', 'tax_arrears', 'loan', 'kiwoom', 'owner_transfer', 'family_transfer', 'personal_out', 'personal_tax', 'supplier', 'other_out'];
+var FLOW_USES = ['taxes', 'tax_arrears', 'vat_diff', 'tax_other', 'bc_held', 'loan', 'kiwoom', 'owner_transfer', 'family_transfer', 'personal_out', 'personal_tax', 'supplier', 'other_out'];
 function cashFlow(store, list, debtCols, opts) {
 var bankFood = !!(opts && opts.bankFood), merge = !!(opts && opts.mergePersonal);
 var ms = (list || []).filter(function (m) { return hasData(m, store); }).sort();
@@ -1764,11 +1797,18 @@ var hasPtax = hasBank && ms.every(function (m) { return stores.every(function (s
 var ptax = hasPtax ? sumBank('ptax') : val(null, null);
 var hasTaxX = hasBank && ms.every(function (m) { return stores.every(function (s) { return isNum(bankBy[m + '/' + s].tax_x); }); });
 var uses = [];
-if (adjOn) {
+if (vatOn) {
+var vPaid = adjSum(store, ms, ['vat_paid']), vDue = adjSum(store, ms, ['vat']);
+uses.push({ id: 'vat_diff', x: subV(vPaid, vDue), parts: { paid: vPaid, due: vDue, offbank: adjSum(store, ms, ['d_tax_x']), est: adjSum(store, ms, ['vat_est']) } });
+uses.push({ id: 'tax_other', x: adjSum(store, ms, ['tax_other']) });
+} else if (adjOn) {
 var tax = sumOver(store, ms, ['taxes']), taxX = hasTaxX ? sumBank('tax_x') : null;
+var taxOb = adjSum(store, ms, ['d_tax_x']);
 uses.push({ id: 'taxes', x: taxX ? subV(tax, taxX) : tax });
-if (taxX) uses.push({ id: 'tax_arrears', x: taxX });
+if (isNum(taxOb.value) && taxOb.v) uses.push({ id: 'tax_arrears', x: taxX ? addV([taxX, taxOb]) : taxOb, parts: { bank: taxX || val(null, null), offbank: taxOb } });
+else if (taxX) uses.push({ id: 'tax_arrears', x: taxX });
 }
+if (adjOn) { var held = adjSum(store, ms, ['d_held']); if (isNum(held.value) && held.v && Math.abs(held.value) >= 0.5) uses.push({ id: 'bc_held', x: held }); }
 uses.push({ id: 'loan', x: fin, parts: { personal: hasLoanP ? loanP : val(null, null) } });
 if (hasKw) uses.push({ id: 'kiwoom', x: addV([kwO, kwF]), parts: { owner: kwO, family: kwF } });
 var own = sumOver(store, ms, ['owner_transfer']), fam = sumOver(store, ms, ['family_transfer']);
@@ -1807,7 +1847,7 @@ cv.push(c.change.value); cp.push('(' + c.change.v + ')');
 });
 if (okD && cv.length) debt = { change: val(sumVals(cv), cp.join(' + ')), cols: debtCols.slice() };
 }
-return { months: ms, store: store, adjusted: adjOn, bankFood: bankFood, earned: earned, uses: uses, usedTotal: usedTotal, left: left, bank: bank, diff: diff, shift: shift, debt: debt, hasBank: hasBank, hasLoanP: hasLoanP, hasKw: hasKw, hasPtax: hasPtax, hasTaxX: hasTaxX };
+return { months: ms, store: store, adjusted: adjOn, vat: vatOn, bankFood: bankFood, earned: earned, uses: uses, usedTotal: usedTotal, left: left, bank: bank, diff: diff, shift: shift, debt: debt, hasBank: hasBank, hasLoanP: hasLoanP, hasKw: hasKw, hasPtax: hasPtax, hasTaxX: hasTaxX };
 }
 function foodBasisOf(month, supplier) { var f = (snap.foodBasis || []).filter(function (x) { return x.month === month && x.supplier === supplier; })[0]; return f ? f.basis : null; }
 function foodDiff(supplier, list) {
@@ -1820,13 +1860,14 @@ vals.push(f.paid - f.buy); paths.push('(' + k + 'paid - ' + k + 'buy)');
 return vals.length ? val(sumVals(vals), plus(paths)) : val(0, 'ui:zero');
 }
 function bcGaps(store, list) {
-var stores = store === 'all' ? ['2ho', 'eungam'] : [store], out = [];
+var stores = store === 'all' ? ['2ho', 'eungam'] : [store], out = [], covered = {};
+(snap.pnlAdj || []).forEach(function (a) { if (isNum(a.d_revenue) && a.d_revenue > 0) covered[a.month + '/' + a.store] = true; });
 var inList = list ? function (m) { return list.indexOf(m) >= 0; } : function () { return true; };
 stores.forEach(function (s) {
 var rows = (snap.bankMonthly || []).filter(function (r) { return r.store === s && isNum(r.bc); }).sort(function (a, b) { return a.month < b.month ? -1 : 1; });
 var seen = false, cur = null;
 rows.forEach(function (r, i) {
-var gap = seen && r.bc === 0 && r.n > 0 && hasData(r.month, s);
+var gap = seen && r.bc === 0 && r.n > 0 && hasData(r.month, s) && !covered[r.month + '/' + s];
 if (r.bc > 0) seen = true;
 if (gap) {
 if (!cur) {
@@ -1905,6 +1946,7 @@ var vals = [], paths = [];
 (list || []).forEach(function (m) { var a = adjBy[m + '/' + store]; if (!a) return; cols.forEach(function (c) { if (isNum(a[c])) { vals.push(a[c]); paths.push('pnlAdj[' + m + '/' + store + '].' + c); } }); });
 return val(vals.length ? sumVals(vals) : null, paths.length ? plus(paths) : null);
 }
+function vatEstMonths(store, list) { return vatOn ? (list || []).filter(function (m) { var a = adjBy[m + '/' + store]; return !!(a && isNum(a.vat_est) && a.vat_est > 0); }) : []; }
 function taxTable(store, period) {
 var stores = store === 'all' ? ['2ho', 'eungam'] : [store];
 var list = Array.isArray(period) ? period.filter(function (m) { return hasData(m, store); }) : months(store).filter(function (m) { return m.slice(0, 4) === String(period); });
@@ -2083,6 +2125,7 @@ sumOver: sumOver, metricOver: metricOver, yearMonths: yearMonths, sameMonthsLast
 debtCell: debtCell, colName: colName, LEAF: LEAF, supplierMonth: supplierMonth,
 util: util, utilGrid: utilGrid, utilPlaces: utilPlaces, utilIssues: utilIssues, utilBankOnly: utilBankOnly, utilNotes: utilNotes, utilCell: utilCell, notesFor: notesFor,
 COST_ROWS: COST_ROWS, SHOWN_COSTS: COSTS, DRIVERS: DRIVERS_I, REV_PARTS: REV_PARTS, KPI_IDS: KPI_IDS, adjusted: adjOn, basis: adjOn ? 'adjusted' : 'bank', hasAdj: !!(snap.pnlAdj && snap.pnlAdj.length),
+vat: vatOn, vatEstMonths: vatEstMonths,
 taxTable: taxTable, foodBank: foodBank, adjSum: adjSum, sumOverBank: sumOverBank, foodBasisOf: foodBasisOf, foodDiff: foodDiff, bcGaps: bcGaps, taxRepay: taxRepay, taxRepayMonths: taxRepayMonths, taxPayList: taxPayList, FLOW_USES: FLOW_USES,
 reviewTextOf: reviewTextOf, supIds: supIds, supOpen: supOpen, supDays: supDays, supGaps: supGaps, supMonths: supMonths, supMonth: supMonth, supBalAt: supBalAt, supMeta: snap.supMeta || null,
 itemList: itemList, itemMonthly: itemMonthly, itemMeta: snap.itemMeta || null,
@@ -2146,7 +2189,7 @@ function changeSentence(M, prefix, cmp, A, B) {
 if (!cmp.d) return { kind: 'info', parts: [prefix.replace(/보다$/, '과') + ' 영업이익이 같아요.'], drill: { kind: 'lines', A: A } };
 var up = cmp.d > 0, parts = [prefix + ' 영업이익이 ', N(absDiff(cmp.a, cmp.b), 'man'), up ? ' 늘었어요.' : ' 줄었어요.'];
 if (cmp.top) parts.push(' ' + josa(M.label(cmp.top.id), '이/가') + ' ', N(absDiff(cmp.top.a, cmp.top.b), 'man'), (cmp.top.change > 0 ? ' 늘어난' : ' 줄어든') + ' 영향이 가장 커요.');
-return { kind: up ? 'good' : 'bad', parts: parts, drill: cmp.top ? { kind: 'pl', line: cmp.top.id, A: A, B: B, dir: cmp.top.change > 0 ? 1 : -1 } : { kind: 'lines', A: A } };
+return { kind: up ? 'good' : 'bad', parts: parts, drill: cmp.top && cmp.top.id !== 'vat' ? { kind: 'pl', line: cmp.top.id, A: A, B: B, dir: cmp.top.change > 0 ? 1 : -1 } : { kind: 'lines', A: A } };
 }
 function resultSentence(subject, op, rev, mg) {
 if (!ok(op)) return null;
@@ -2163,7 +2206,7 @@ if (!ok(rev) || !rev.value) return null;
 var best = null;
 M.SHOWN_COSTS.forEach(function (c) { var x = M.sumOver(store, list, c.cols); if (ok(x) && (!best || x.value > best.x.value)) best = { id: c.id, x: x }; });
 if (!best || best.x.value <= 0) return null;
-return { kind: 'info', parts: ['가장 큰 비용은 ' + josa(M.label(best.id), '으로/로') + ' 매출의 ', N({ value: best.x.value / rev.value, v: '(' + best.x.v + ') / (' + rev.v + ')' }, 'pct'), '예요.'], drill: { kind: 'pl', line: best.id, A: list } };
+return { kind: 'info', parts: ['가장 큰 비용은 ' + josa(M.label(best.id), '으로/로') + ' 매출의 ', N({ value: best.x.value / rev.value, v: '(' + best.x.v + ') / (' + rev.v + ')' }, 'pct'), '예요.'], drill: best.id === 'vat' ? { kind: 'lines', A: list } : { kind: 'pl', line: best.id, A: list } };
 }
 function buyVsPaid(M, store, month, label) {
 if (store !== 'all') return null;
@@ -2291,6 +2334,9 @@ function isKiwoom(r) { return (r.line === 'owner_transfer' || r.line === 'family
 var FLOW = {
 taxes: function (r) { return r.line === 'taxes' && !TAX_ARREARS.test(r.detail); },
 tax_arrears: function (r) { return r.line === 'taxes' && TAX_ARREARS.test(r.detail); },
+vat_diff: function (r) { return r.line === 'taxes' && r.tk === 'v'; },
+tax_other: function (r) { return r.line === 'taxes' && !!r.tk && r.tk !== 'v'; },
+bc_held: function (r) { return r.line === 'bc_held'; },
 loan: function (r) { return r.line === 'finance_out'; },
 loan_personal: function (r) { return r.line === 'finance_out' && PERSONAL_LOAN.test(r.detail); },
 finance_out: function (r) { return r.line === 'finance_out'; },
@@ -2316,7 +2362,7 @@ var out = [], q = String(opts.q || '').trim().toLowerCase();
 (contents || []).forEach(function (c) {
 var t = c && (c.txm || c.txo);
 if (!t || !Array.isArray(t.r)) return;
-t.r.forEach(function (r) {
+var one = function (r, ob) {
 var k = t.k[r[3]] || ['', '', '', '', ''], line = k[4] || '';
 if (opts.line && line !== opts.line) return;
 var sup = k[5] || '';
@@ -2326,11 +2372,15 @@ var loanP = line === 'finance_out' && PERSONAL_LOAN.test(k[2] || '');
 var row = { date: t.m + '-' + pad2(r[0]), month: t.m, name: r[1], raw: r[2], amount: signOf(line) * r[2] * sh, out: -r[2] * sh, share: sh, split: r[4],
 major: k[0], item: k[1], detail: k[2], pl: k[3], line: line, inside: k[3] !== '손익밖', sup: sup,
 cls: loanP ? LOAN_P_NAME : k[0] + ' › ' + k[1], what: loanP ? LOAN_P_NAME : k[1] + (k[2] ? ' · ' + k[2] : '') };
+if (ob) row.ob = true;
+if (r[5]) row.tk = r[5];
 if (opts.flow && !(FLOW[opts.flow] && FLOW[opts.flow](row))) return;
 if (opts.keep && !opts.keep(row)) return;
 if (q && (row.name + ' ' + row.detail + ' ' + row.major + ' ' + row.item + ' ' + row.what).toLowerCase().indexOf(q) < 0) return;
 out.push(row);
-});
+};
+t.r.forEach(function (r) { one(r, false); });
+if (opts.ob && Array.isArray(t.ob)) t.ob.forEach(function (r) { one(r, true); });
 });
 return out;
 }
@@ -2351,6 +2401,7 @@ var ck = r.cls || r.major + ' › ' + r.item; g.classes[ck] = (g.classes[ck] || 
 g.splits[r.split] = true;
 if (r.date > g.last) g.last = r.date; if (r.date < g.first) g.first = r.date;
 if (r.inside) g.inside++; else g.outside++;
+if (r.ob) g.ob = (g.ob || 0) + 1;
 });
 return out.sort(by === 'date'
 ? function (a, b) { return a.last < b.last ? 1 : a.last > b.last ? -1 : Math.abs(b.amount) - Math.abs(a.amount); }
@@ -4244,8 +4295,13 @@ var L = root.Ledger, U = L.ui, F = L.fmt, C = L.copy, _ = L.screens._;
 function T(ctx, k) { return ctx && ctx.term ? ctx.term(k) : (C.terms && C.terms[k]) || k; }
 function termOf(ctx, k) { return T(ctx, k); }
 function tableCfg(ctx) { var c = (ctx && ctx.V && ctx.V.debtTable) || {}; return { kids: c.kids !== false, source: c.source !== false, unknownNote: c.unknownNote !== false, hideEmpty: c.hideEmpty || [], payoff: c.payoff !== false }; }
-function chartCols(ctx) { var dc = ctx && ctx.V && ctx.V.debtChart; return dc && dc.cols && dc.cols.length ? dc.cols.slice() : null; }
-function chartNames(M, cols) { return cols.map(function (c) { return String(M.colName(c)).replace(/\s*\(.*\)\s*$/, ''); }).join('·'); }
+function taxIn(ctx) { var tp = ctx && ctx.M && ctx.M.taxPeriods ? ctx.M.taxPeriods() : null; return !!(tp && tp.full); }
+function chartCols(ctx) {
+var dc = ctx && ctx.V && ctx.V.debtChart; if (!(dc && dc.cols && dc.cols.length)) return null;
+var c = dc.cols.slice(); if (taxIn(ctx)) ['tax_2ho', 'tax_eungam'].forEach(function (x) { if (c.indexOf(x) < 0) c.push(x); });
+return c;
+}
+function chartNames(M, cols) { return cols.map(function (c) { return String(M.colName(c)).replace(/\s*\(.*\)\s*$/, ''); }).filter(function (n, i, a) { return a.indexOf(n) === i; }).join('·'); }
 function visibleGroups(ctx, groups) { var cfg = tableCfg(ctx); return groups.filter(function (g) { return !L.model.debtHidden(g, cfg); }); }
 function whatIf(ctx, total, pace, idp) {
 var M = ctx.M;
@@ -4327,6 +4383,7 @@ if (nowRow && F.isNum(nowRow.value)) parts.push('<span class="mk-pt"><span class
 return '<p class="debt-marks sr-only">' + parts.join('<span class="mk-arrow"> → </span>') + '</p>';
 }
 function taxPlus(ctx, data) {
+if (taxIn(ctx)) return '';
 var M = ctx.M, ref = Number(String(M.today).slice(0, 4));
 var tg = visibleGroups(ctx, M.debtGroups()).filter(function (g) { return g.kind === 'tax' && F.isNum(g.current.value) && g.current.v; });
 if (!tg.length) return '';
@@ -4411,7 +4468,7 @@ return '<tbody><tr class="fig"><td class="name"><a href="' + U.esc(href) + '">' 
 (cfg.source ? '<td class="src hide-phone">' + src + '</td>' : '') + '<td class="phone-line">' + phone + '</td></tr>' + track + '</tbody>';
 };
 var mainG = groups.filter(function (g) { return g.kind !== 'tax'; }), taxG = groups.filter(function (g) { return g.kind === 'tax'; });
-var body = mainG.map(rowOf).join('') + (taxG.length ? '<tbody class="debt-sep"><tr><td colspan="' + cols + '"><span class="sep-label">세금</span></td></tr></tbody>' + taxG.map(rowOf).join('') : '');
+var body = taxIn(ctx) ? groups.map(rowOf).join('') : mainG.map(rowOf).join('') + (taxG.length ? '<tbody class="debt-sep"><tr><td colspan="' + cols + '"><span class="sep-label">세금</span></td></tr></tbody>' + taxG.map(rowOf).join('') : '');
 return '<div class="table-wrap"><table class="debt-table"><caption class="sr-only">' + U.esc(T(ctx, 'debts')) + ' 항목별</caption>' + head + body + '</table></div>';
 }
 function headline(ctx) {
@@ -4442,8 +4499,9 @@ var nowRow = data.filter(function (d) { return d.month === M.debtMonth; })[0];
 var lead = nowRow && F.isNum(nowRow.value) && !(ctx.V && ctx.V.quietNotes) ? '<p class="chart-lead">지금 ' + ctx.num({ value: nowRow.value, v: nowRow.v }, 'man') +
 (F.isNum(ch) ? ' · ' + DT.since(M, M.prevDebtMonth) + ' ' + (ch < 0 ? ctx.num({ value: -ch, v: '-(' + cmp.change.v + ')' }, 'man', { tone: 'good' }) + ' 줄었어요' : ch > 0 ? ctx.num(cmp.change, 'man', { tone: 'bad' }) + ' 늘었어요' : '그대로예요') : '') + '</p>' : '';
 var d2 = trimmed(data);
-return _.panel('c12 d-chart', '거래처 외상, 달마다', U.esc(names) + ' · ' + U.esc(F.month(shown[0] && shown[0].month)) + '부터' + (future ? ' · 점선은 예측' : ''),
-lead + '<div class="chart" id="debt-line"></div>' + marksLine(ctx, d2) + taxPlus(ctx, data) + lineTable(ctx, data, '거래처 외상(' + names + '), 달마다'));
+var what = taxIn(ctx) ? T(ctx, 'debts') : '거래처 외상';
+return _.panel('c12 d-chart', what + ', 달마다', U.esc(names) + ' · ' + U.esc(F.month(shown[0] && shown[0].month)) + '부터' + (future ? ' · 점선은 예측' : ''),
+lead + '<div class="chart" id="debt-line"></div>' + marksLine(ctx, d2) + taxPlus(ctx, data) + lineTable(ctx, data, what + '(' + names + '), 달마다'));
 }
 function taxPaysPanel(ctx) {
 var M = ctx.M;
@@ -4486,7 +4544,7 @@ taxPaysPanel(ctx) + '</div>';
 mount: function (rootEl, ctx) {
 var el = rootEl.querySelector('#debt-line');
 var cc = chartCols(ctx);
-if (el) drawLine(el, ctx, lineData(ctx, cc || ['all_total']), cc ? '거래처 외상' : T(ctx, 'debtsTotal'), cc || ['all_total']);
+if (el) drawLine(el, ctx, lineData(ctx, cc || ['all_total']), cc ? (taxIn(ctx) ? T(ctx, 'debts') : '거래처 외상') : T(ctx, 'debtsTotal'), cc || ['all_total']);
 mountTracks(rootEl, ctx);
 }
 };
@@ -4500,7 +4558,7 @@ ariaLabel: name + ': 기준 ' + F.man(b) + ' 중 ' + F.man(c) + ' 남음' + (c !
 var lg = rootEl.querySelector('.track-legend');
 if (lg) window.Charts.trackLegend(lg, { owed: '남은 돈', paid: '갚은 돈', over: lg.getAttribute('data-over') === '1' ? '기준보다 늘어난 돈' : null }, lg);
 }
-L.screens._debts = { excludedNote: excludedNote, taxNote: taxNote, taxPaysPanel: taxPaysPanel, bcSpans: bcSpans, chartCols: chartCols, tableCfg: tableCfg, visibleGroups: visibleGroups, whatIf: whatIf, mountWhatIf: mountWhatIf, lineData: lineData, drawLine: drawLine, lineTable: lineTable, trackRow: trackRow, mountTracks: mountTracks, debtTable: debtTable, points: points, trimmed: trimmed };
+L.screens._debts = { taxIn: taxIn, excludedNote: excludedNote, taxNote: taxNote, taxPaysPanel: taxPaysPanel, bcSpans: bcSpans, chartCols: chartCols, tableCfg: tableCfg, visibleGroups: visibleGroups, whatIf: whatIf, mountWhatIf: mountWhatIf, lineData: lineData, drawLine: drawLine, lineTable: lineTable, trackRow: trackRow, mountTracks: mountTracks, debtTable: debtTable, points: points, trimmed: trimmed };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 (function (root) {
 var L = root.Ledger, U = L.ui, F = L.fmt, C = L.copy, S = L.Snapshot, _ = L.screens._, D = L.screens._debts;
@@ -4588,14 +4646,28 @@ var basis = M.snap.meta && M.snap.meta.tax_snapshot_date ? '홈택스 ' + U.esc(
 if (!rows.length) return '<div class="grid">' + _.panel('c12', '세금 고지', basis, U.emptyBlock('세금 고지가 없어요.')) + '</div>';
 var ht = rows.filter(S.isHometax), other = rows.filter(function (t) { return !S.isHometax(t); });
 var parts = '';
-if (ht.length && other.length) {
-parts += _.panel('c12', '홈택스 국세', basis + ' · ' + T(ctx, 'debtsTotal') + '에 들어가요', taxTable(ctx, ht, '홈택스 국세'), taxFoot(ctx, ht)) +
-_.panel('c12', '고지서·납부서', '지방세·과태료 등 · ' + T(ctx, 'debtsTotal') + '에는 안 들어가요', taxTable(ctx, other, '고지서·납부서 세금'), taxFoot(ctx, other) +
-'<span class="muted">엑셀 부채현황의 세금은 홈택스 조회 금액이에요.</span>');
-} else parts += _.panel('c12', '세금 고지', basis, taxTable(ctx, rows, '세금 고지'), taxFoot(ctx, rows));
 var tp = M.taxPeriods ? M.taxPeriods() : null, hist = tp && tp.filled.length;
+var unb = unbilledPanel(ctx, g, tp);
+if (ht.length && other.length) {
+parts += _.panel('c12', '홈택스 국세', basis + ' · ' + T(ctx, 'debtsTotal') + '에 들어가요', taxTable(ctx, ht, '홈택스 국세'), taxFoot(ctx, ht)) + unb +
+_.panel('c12', '고지서·납부서', '지방세·과태료 등 · ' + T(ctx, 'debtsTotal') + '에는 안 들어가요', taxTable(ctx, other, '고지서·납부서 세금'), taxFoot(ctx, other) +
+'<span class="muted">엑셀 부채현황의 세금은 홈택스 조회 금액이에요' + (unb ? '(고지 전 신고분은 빠져 있어요)' : '') + '.</span>');
+} else parts += _.panel('c12', '세금 고지', basis, taxTable(ctx, rows, '세금 고지'), taxFoot(ctx, rows)) + unb;
 var chart = D.taxPaysPanel ? D.taxPaysPanel(ctx) : '';
 return '<div class="grid">' + parts + chart + (hist && ctx.V && ctx.V.details ? liabPanel(ctx, g, tp) : '') + '</div>';
+}
+function unbilledPanel(ctx, g, tp) {
+if (!tp || !tp.full) return '';
+var M = ctx.M, ref = Number(String(M.today).slice(0, 4)), stores = {};
+g.debts.forEach(function (d) { stores[d.store] = true; });
+var rows = tp.liab.filter(function (r) { return r.unbilled && r.final > 0 && (stores[r.store] || stores.all); });
+if (!rows.length) return '';
+var path = function (r, c) { return 'taxLiab[' + r.id + '].' + c; };
+var tot = { value: rows.reduce(function (a, r) { return a + r.final; }, 0), v: rows.map(function (r) { return path(r, 'final'); }).join(' + ') };
+var body = '<div class="rows">' + rows.map(function (r) {
+return '<div class="row"><div class="grow"><span class="title">' + U.esc(r.kind) + ' · ' + U.esc(r.period) + '</span><span class="line2">' + U.esc(ctx.storeName(r.store)) + ' · ' + U.esc(F.month(r.start, { refYear: ref })) + ' 신고 기한이 지났어요</span></div><span class="amt">' + ctx.num({ value: r.final, v: path(r, 'final') }, 'won') + '</span></div>';
+}).join('') + '</div>';
+return _.panel('c12', '고지 전 신고분', '홈택스 납부할 세액 목록에 아직 없어요 · ' + T(ctx, 'debtsTotal') + '에 들어가요', '<p class="muted">신고는 했는데 아직 고지서가 안 나온 부가세예요. 고지서가 나오면 위 홈택스 목록으로 옮겨 가요.</p>' + body, '<span>합계 ' + ctx.num(tot, 'won') + '</span>');
 }
 function liabPanel(ctx, g, tp) {
 var M = ctx.M, ref = Number(String(M.today).slice(0, 4)), stores = {};
@@ -4605,7 +4677,7 @@ if (!rows.length) return '';
 var path = function (r, c) { return 'taxLiab[' + r.id + '].' + c; };
 var asOf = tp.snapDate ? F.date(tp.snapDate, { refYear: ref }) : '지금';
 function table(list, caption) {
-return '<div class="table-wrap"><table class="stack-table"><caption class="sr-only">' + U.esc(caption) + '</caption><thead><tr><th scope="col">세목 · 귀속</th><th scope="col">가게</th><th class="n" scope="col">남기 시작한 달</th><th class="n hide-phone" scope="col">통장에서 낸 돈(원)</th><th class="n hide-phone" scope="col">마지막 낸 날</th><th class="n" scope="col">' + U.esc(asOf) + ' 남은 세금(원)</th></tr></thead><tbody>' +
+return '<div class="table-wrap"><table class="stack-table"><caption class="sr-only">' + U.esc(caption) + '</caption><thead><tr><th scope="col">세목 · 귀속</th><th scope="col">가게</th><th class="n" scope="col">남기 시작한 달</th><th class="n hide-phone" scope="col">' + (tp.full ? '낸 돈' : '통장에서 낸 돈') + '(원)</th><th class="n hide-phone" scope="col">마지막 낸 날</th><th class="n" scope="col">' + U.esc(asOf) + ' 남은 세금(원)</th></tr></thead><tbody>' +
 list.map(function (r) {
 var done = !(r.final > 0);
 return '<tr' + (done ? ' class="muted"' : '') + '><th scope="row">' + U.esc(r.kind) + '<span class="sub">' + U.esc(r.period) + (r.assumed ? ' · 날짜 모르는 납부는 기한에 냄으로 봄' : '') + '</span></th><td>' + U.esc(ctx.storeName(r.store)) + '</td>' +
@@ -4619,7 +4691,7 @@ var body = (open.length ? table(open, '남은 세금 기간별') : U.emptyBlock(
 (done.length ? '<details class="as-table"><summary>다 낸 세금 ' + done.length + '건</summary>' + table(done, '다 낸 세금 기간별') + '</details>' : '');
 var tot = { value: open.reduce(function (a, r) { return a + r.final; }, 0), v: open.map(function (r) { return path(r, 'final'); }).join(' + ') || null };
 var foot = '<span>남은 세금 합계 ' + ctx.num(tot, 'won') + ' · 고지서 ' + ctx.num({ value: open.length, v: 'ui:taxOpen' }, 'count') + '</span>';
-return _.panel('c12', '세금 기간별', '고지서 · 통장 납부 기록', '<p class="muted">고지서마다 고지(발행)일, 없으면 납부기한 달부터 통장에서 다 낸 달까지 남은 세금으로 셌어요.</p>' + body, foot);
+return _.panel('c12', '세금 기간별', tp.full ? '홈택스 납부내역 · 남은 세금' : '고지서 · 통장 납부 기록', '<p class="muted">' + (tp.full ? '세금마다 원래 기한 달부터 다 낸 달까지 남은 세금으로 셌어요(홈택스 납부내역 — 통장·BC 압류·통장 밖으로 낸 돈 모두).' : '고지서마다 고지(발행)일, 없으면 납부기한 달부터 통장에서 다 낸 달까지 남은 세금으로 셌어요.') + '</p>' + body, foot);
 }
 var UTIL_MAIN = ['차이', '은행 없음', '빠짐?'], UTIL_INFO = ['기록 없음', '다른 계좌'];
 function utilityTable(ctx, rows, caption) {
@@ -4960,6 +5032,19 @@ if (id === 'loan' && admin) {
 var ps = flows.map(function (fl) { var u = useOf(fl, 'loan'); return u && u.parts ? u.parts.personal : null; });
 if (ps.some(nz)) body += '<tr class="sub-row"><th scope="row">' + nameHtml('loan_personal') + '</th>' + ps.map(function (x) { return cell(x, false); }).join('') + '</tr>';
 }
+if (id === 'tax_arrears' && admin) {
+var obs = flows.map(function (fl) { var u = useOf(fl, 'tax_arrears'); return u && u.parts ? u.parts.offbank : null; });
+if (obs.some(nz)) body += '<tr class="sub-row"><th scope="row">그중 통장 밖</th>' + obs.map(function (x) { return cell(x, false); }).join('') + '</tr>';
+}
+if (id === 'vat_diff' && admin) {
+var part = function (k) { return flows.map(function (fl) { var u = useOf(fl, 'vat_diff'); return u && u.parts ? u.parts[k] : null; }); };
+var pp = part('paid'), dd = part('due'), ob2 = part('offbank');
+if (pp.some(nz) || dd.some(nz)) {
+body += '<tr class="sub-row"><th scope="row">낸 부가세</th>' + pp.map(function (x) { return cell(x, false); }).join('') + '</tr>';
+if (ob2.some(nz)) body += '<tr class="sub-row"><th scope="row">그중 통장 밖</th>' + ob2.map(function (x) { return cell(x, false); }).join('') + '</tr>';
+body += '<tr class="sub-row"><th scope="row">− 이번 몫(손익 비용)</th>' + dd.map(function (x) { return cell(x, false); }).join('') + '</tr>';
+}
+}
 });
 var totalOf = function (fl, j) {
 if (!fl) return null;
@@ -4988,7 +5073,8 @@ body += '<tr class="total"><th scope="row">합계</th>' + flows.map(function (fl
 body += '<tr class="left"><th scope="row">' + leftName + '</th>' + flows.map(function (fl) { return cell(fl ? fl.left : null, maskedAny); }).join('') + '</tr>';
 }
 var head = '<thead><tr><th scope="col">항목</th>' + colsL.map(function (c) { return '<th class="n" scope="col">' + U.esc(c.label) + '(원)</th>'; }).join('') + '</tr></thead>';
-var note = (M.adjusted ? '영업이익에 넣지 않고 나간 돈이에요(세금 포함) — 합계는 지출 칸의 지출과 같아요.'
+var note = (M.adjusted && M.vat ? '영업이익에 넣지 않고 나간 돈이에요 — 부가세는 이번 몫이 손익 비용(부가세)에 있어서 여기에는 낸 돈과의 차이(밀린 부가세, 덜 냈으면 −)만, 원천세·지방세는 그 외 세금이에요. 합계는 지출 칸의 지출과 같아요.'
+: M.adjusted ? '영업이익에 넣지 않고 나간 돈이에요(세금 포함) — 합계는 지출 칸의 지출과 같아요.'
 : '영업이익(통장 기준)에 넣지 않고 나간 돈이에요. 통장 그대로 보기라 세금은 영업비용 안에 있고 거래처에 보낸 돈은 식재료비에 들어 있어서 세금·거래처 외상 줄이 없어요.') +
 ' 영업이익 = 이 표의 합계 + ' + leftName + '이에요.' +
 (supOn ? ' 외상 줄은 명세표로 산 것과 통장으로 보낸 돈의 차이예요(더 보냈으면 숫자 · 덜 보냈으면 −, 명세표가 있는 달만).' + (supSplit ? ' 외상을 누르면 거래처마다 보여요(합계에는 외상 한 줄만 들어가요).' : '') + ' 외상 잔액이 실제로 얼마나 줄었는지는 부채·외상 화면에 있어요.' : '') +
@@ -5003,16 +5089,23 @@ if (!ctx.M.adjusted || !ctx.M.foodBank) return '';
 var list = (T.groups ? T.months : T.months.filter(function (m, i) { return T.hasData && T.hasData[i]; })).map(function (m) { var l = ctx.M.foodBank(m); return l.length ? F.month(m, { refYear: refYear(ctx) }) + ' ' + l.join('·') : ''; }).filter(Boolean);
 return list.length ? '<p class="note">* 식재료비: 명세표가 없어 통장에서 낸 돈으로 넣은 거래처 — ' + U.esc(list.join(' · ')) + '</p>' : '';
 }
+function vatNote(ctx, T) {
+var M = ctx.M;
+if (!M.vat || !T.costs.some(function (c) { return c.id === 'vat'; })) return '';
+var ms = T.groups ? T.months : T.months.filter(function (m, i) { return T.hasData && T.hasData[i]; }), est = M.vatEstMonths(ctx.f.store, ms);
+return '<p class="note">* 부가세: 분기 납부서 금액을 석 달에 똑같이 나눠 넣었어요' + (est.length ? ' · ' + U.esc(est.map(function (m) { return F.month(m, { refYear: refYear(ctx) }); }).join('·')) + '은 신고 전이라 최근 1년 평균(추정)이에요' : '') + '. 원천세·지방세는 손익 밖 지출(그 외 세금)에 있어요.</p>';
+}
 function tableNotes(ctx, T) {
 if (ctx.V && ctx.V.quietNotes) return '';
-if (!subOn(ctx)) return foodNote(ctx, T) + '<p class="note">' + U.esc(C.opexNote) + (txOn(ctx, 'food') ? ' 줄 이름을 누르면 그 기간의 통장 거래를 모두 볼 수 있어요.' : '') + '</p>';
+if (!subOn(ctx)) return foodNote(ctx, T) + vatNote(ctx, T) + '<p class="note">' + U.esc(C.opexNote) + (txOn(ctx, 'food') ? ' 줄 이름을 누르면 그 기간의 통장 거래를 모두 볼 수 있어요.' : '') + '</p>';
 var moved = T.costs.some(function (c) { return shownItems(ctx, c).some(function (it) { return it.moved; }); });
-return foodNote(ctx, T) + '<p class="note pc-only">대분류 이름을 누르면 안 항목이 그 대분류 중 몇 %인지 보여요(합계 칸 = 한 해).' + (ctx.M.adjusted ? ' 식재료 안 항목 %는 통장에서 낸 돈 기준이에요.' : '') + '</p>' +
+return foodNote(ctx, T) + vatNote(ctx, T) + '<p class="note pc-only">대분류 이름을 누르면 안 항목이 그 대분류 중 몇 %인지 보여요(합계 칸 = 한 해).' + (ctx.M.adjusted ? ' 식재료 안 항목 %는 통장에서 낸 돈 기준이에요.' : '') + '</p>' +
 (moved ? '<p class="note">' + U.esc(C.opexNote) + '</p>' : '') + (shareNoteNeeded(ctx, T) ? '<p class="note">' + U.esc(SHARE_NOTE) + '</p>' : '');
 }
 function flowLabel(ctx, u, sup) {
 var id = u.id, x = u.x, T = C.flowLines, neg = F.isNum(x.value) && x.value < 0, who = '거래처' + (sup ? '(' + sup + ')' : '');
 if (id === 'supplier') return neg ? [T.supplier_less.name, T.supplier_less.sub + ' · ' + who + ', 명세표가 있는 달만'] : [T.supplier.name, T.supplier.sub + ' · ' + who + ', 명세표가 있는 달만'];
+if (id === 'vat_diff') { var vl = neg ? T.vat_less : T.vat_more; return [vl.name, vl.sub]; }
 var l = T[id] || { name: id, sub: '' };
 if (id === 'loan' && neg) return [l.name, '들어온 돈(보험 해지환급 등)이 낸 돈보다 많았어요'];
 if (id === 'other_out') return [l.name, (ctx.f.store === 'all' ? '분류 안 된 돈 등' : '가게 사이 이체 · 다른 가게와 나눈 몫 · 분류 안 된 돈') + (neg ? ' — 들어온 돈이 더 많았어요' : '')];
@@ -5022,6 +5115,13 @@ function extraSub(ctx, u) {
 if (!(ctx.V && ctx.V.details) || !u.parts) return '';
 var nz = function (x) { return x && F.isNum(x.value) && Math.abs(x.value) >= 0.5 && x.v; };
 if (u.id === 'loan' && nz(u.parts.personal)) return ' · 그중 ' + U.esc(C.flowLines.loan_personal.name) + ' ' + ctx.num(u.parts.personal, 'man');
+if (u.id === 'tax_arrears' && nz(u.parts.offbank)) return ' · 그중 통장 밖 ' + ctx.num(u.parts.offbank, 'man');
+if (u.id === 'vat_diff') {
+var v = [];
+if (nz(u.parts.paid)) v.push('낸 부가세 ' + ctx.num(u.parts.paid, 'man') + (nz(u.parts.offbank) ? '(그중 통장 밖 ' + ctx.num(u.parts.offbank, 'man') + ')' : ''));
+if (nz(u.parts.due)) v.push('이번 몫 ' + ctx.num(u.parts.due, 'man') + (nz(u.parts.est) ? '(그중 추정 ' + ctx.num(u.parts.est, 'man') + ')' : ''));
+return v.length ? ' · ' + v.join(' · ') : '';
+}
 if (u.id === 'kiwoom') {
 var a = [];
 if (nz(u.parts.owner)) a.push('대표자 명의 ' + ctx.num(u.parts.owner, 'man'));
@@ -5058,10 +5158,11 @@ var nameOf = function (id, text) { return pop ? '<button type="button" class="tx
 var shareOfEarned = function (x) { return base && F.isNum(x.value) && x.value > 0 && x.v ? { value: x.value / base, v: '(' + x.v + ') / (' + earned.v + ')' } : null; };
 var bar = function (sh) { return sh ? '<span class="flow-bar" aria-hidden="true"><span class="share" data-w="' + Math.min(100, sh.value * 100).toFixed(1) + '"></span></span>' : ''; };
 var shown = fl.uses.filter(function (u) { return F.isNum(u.x.value) && Math.abs(u.x.value) >= 0.5; });
-var adj = shown.filter(function (u) { return u.id === 'supplier' && u.x.value < 0; })[0] || null;
-var spend = shown.filter(function (u) { return u !== adj; });
+var isLess = function (u) { return (u.id === 'supplier' || u.id === 'vat_diff') && u.x.value < 0; };
+var adjs = shown.filter(isLess);
+var spend = shown.filter(function (u) { return !isLess(u); });
 var supNames = cols.map(function (c) { return shortName(M, c); }).join('·');
-var body = row(U.esc(M.label('op_profit')), U.esc(fl.adjusted ? '세금 내기 전 · 손익 칸 영업이익과 같아요' : '통장 기준'), earned, 'lead-row');
+var body = row(U.esc(M.label('op_profit')), U.esc(fl.adjusted ? (fl.vat ? '부가세(그 달 몫) 뺀 뒤 · 손익 칸 영업이익과 같아요' : '세금 내기 전 · 손익 칸 영업이익과 같아요') : '통장 기준'), earned, 'lead-row');
 body += '<div class="row flow-sec"><span class="grow">지출 내역</span>' + (base ? '<span class="sec-note">이익 대비</span>' : '') + '</div>';
 spend.forEach(function (u) {
 var l = flowLabel(ctx, u, supNames), sh = shareOfEarned(u.x);
@@ -5072,9 +5173,9 @@ var have = spend.filter(function (u) { return F.isNum(u.x.value) && u.x.v; });
 return { value: have.reduce(function (a, u) { return a + u.x.value; }, 0), v: have.map(function (u) { return '(' + u.x.v + ')'; }).join(' + ') || null };
 })();
 if (spend.length > 1) { var tsh = shareOfEarned(spendTotal); body += row('지출 합계', tsh ? '이익의 ' + ctx.num(tsh, 'pct0') : '', neg(spendTotal), 'sub-total'); }
-if (adj) { var la = flowLabel(ctx, adj, supNames); body += row(nameOf('supplier', la[0]), U.esc(la[1]), neg(adj.x), 'adj'); }
+var adjNames = adjs.map(function (a) { var la = flowLabel(ctx, a, supNames); body += row(nameOf(a.id, la[0]), U.esc(la[1]) + extraSub(ctx, a), neg(a.x), 'adj'); return la[0]; });
 var t = fl.left.value;
-body += row('잔액', U.esc(M.label('op_profit') + ' − 지출' + (adj ? ' + 거래처 외상 남음' : '')) + (F.isNum(t) && t < 0 && fl.left.v ? ' · 이익보다 ' + ctx.num({ value: -t, v: '-(' + fl.left.v + ')' }, 'man') + ' 더 썼어요' : ''), fl.left, 'total');
+body += row('잔액', U.esc(M.label('op_profit') + ' − 지출' + adjNames.map(function (n) { return ' + ' + n; }).join('')) + (F.isNum(t) && t < 0 && fl.left.v ? ' · 이익보다 ' + ctx.num({ value: -t, v: '-(' + fl.left.v + ')' }, 'man') + ' 더 썼어요' : ''), fl.left, 'total');
 var refLine = '';
 if (admin && fl.bank && F.isNum(fl.diff.value)) {
 var who = f.store === 'all' ? '두 통장' : ctx.storeName(f.store) + ' 통장', same = Math.abs(fl.diff.value) < 0.5;
@@ -5096,7 +5197,8 @@ var half = f.store !== 'all' && M.hasHalf([f.store], fl.months) ? '<p class="not
 var fms = flowMonths(ctx), lefts = monthLefts(ctx, fms);
 var tbl = U.asTable('달마다 잔액', ['달', '잔액(원)'], fms.map(function (m, i) { return [lefts[i] ? '<button type="button" class="txline" data-flow-month="' + m + '" aria-haspopup="dialog">' + U.esc(F.month(m)) + '</button>' : U.esc(F.month(m)), ctx.num(lefts[i] || { value: null, v: 'ui:none' }, 'digits', { sign: true })]; }));
 var chart = _.chartBox('pnl-flow', 220, _.barLabels(ctx, lefts, 'short')) + tbl;
-var lead = ctx.V && ctx.V.quietNotes ? '' : '<p class="muted flow-lead">달마다 잔액(영업이익 − 지출)이에요. 0 위 = 남은 달, 아래 빨강 = 이익보다 더 쓴 달. 막대를 누르면 그 달 어디에 썼는지 보여요. 거래처에 명세표보다 더 보낸 달은 \'외상 갚음\', 덜 보낸 달은 \'외상 남음\'으로 보여요.</p>';
+var lead = ctx.V && ctx.V.quietNotes ? '' : '<p class="muted flow-lead">달마다 잔액(영업이익 − 지출)이에요. 0 위 = 남은 달, 아래 빨강 = 이익보다 더 쓴 달. 막대를 누르면 그 달 어디에 썼는지 보여요. 거래처에 명세표보다 더 보낸 달은 \'외상 갚음\', 덜 보낸 달은 \'외상 남음\'으로 보여요.' +
+(M.vat ? ' 부가세도 이번 몫(분기 부가세를 석 달에 나눈 것)보다 더 낸 달은 \'밀린 부가세 갚음\', 덜 낸 달은 \'부가세 밀림\'으로 보여요.' : '') + '</p>';
 var listOn = !(ctx.V && ctx.V.flowBarsOnly);
 var span = !f.multi ? yearOf(ctx) + '년' : fms.length > 1 ? F.month(fms[0], { year: true }) + '~' + F.month(fms[fms.length - 1], { refYear: Number(fms[0].slice(0, 4)) }) : periodLabel(ctx);
 return _.panel('c12 flow', '지출', U.esc(span) + ' · ' + U.esc(ctx.storeName(f.store)),
@@ -5108,15 +5210,19 @@ function basisLine(ctx) {
 var M = ctx.M, toggle = !!(ctx.V && ctx.V.bankToggle), half = M.splitHalf ? '<span class="basis-half">' + U.esc(HALF_TEXT) + '</span>' : '';
 if (ctx.bankView) return '<p class="basis-line" role="status"><span>통장 그대로 보는 중이에요(확인용 — 세금 포함, 낸 날 기준).</span>' + half + '<button type="button" class="btn ghost basis-btn" data-basis="adj">월 맞춤으로 보기</button></p>';
 if (!M.adjusted) return half ? '<p class="basis-line">' + half + '</p>' : '';
-return '<p class="basis-line"><span>손익 기준: 임대료·고정비·인건비는 그 달 몫, 식재료는 명세표, 가족 명의 지출은 3개월 평균, 세금은 손익에서 빼고 아래 지출에</span>' + half + (toggle ? '<button type="button" class="btn ghost basis-btn" data-basis="bank">통장 그대로 보기</button>' : '') + '</p>';
+return '<p class="basis-line"><span>손익 기준: 임대료·고정비·인건비는 그 달 몫, 식재료는 명세표, 가족 명의 지출은 3개월 평균, ' +
+(M.vat ? '부가세는 분기 납부서를 석 달에 나눠 비용에(신고 전 달은 최근 1년 평균), 원천세·지방세는 손익에서 빼고 아래 지출에' : '세금은 손익에서 빼고 아래 지출에') + '</span>' + half + (toggle ? '<button type="button" class="btn ghost basis-btn" data-basis="bank">통장 그대로 보기</button>' : '') + '</p>';
 }
-function ratioNote(ctx, sel) {
+function ratioNote(ctx, sel, months) {
 var M = ctx.M;
 if (sel.id === 'food_ratio') return '식재료 원가율 = 식재료비 ÷ 매출이에요.' + (M.adjusted ? ' 월 맞춤이라 식재료비가 거래명세표 기준(명세표가 없는 달·거래처는 통장 기준)이고, 원가율도 그 기준이에요.' : ' 식재료비는 통장에서 낸 돈 기준이에요.');
 if (sel.id === 'labor_ratio') return '인건비율 = 인건비 ÷ 매출이에요.' + (M.adjusted ? ' 인건비는 그 달 몫이에요(다음 달 초에 준 급여도 그 달에).' : '');
-var rev = ctx.V && ctx.V.kpiLabels && ctx.V.kpiLabels.revenue ? ctx.V.kpiLabels.revenue + '(통장에 들어온 매출)' : '매출';
-if (sel.id === 'op_margin') return '이익률 = 영업이익 ÷ ' + rev + '이에요.' + (M.adjusted ? ' 영업이익은 세금 내기 전이에요.' : '');
-if (sel.id === 'revenue' && ctx.V && ctx.V.kpiLabels && ctx.V.kpiLabels.revenue) return ctx.V.kpiLabels.revenue + ' = 카드사·배달앱 등이 수수료를 떼고 통장에 넣어 준 매출이에요(손익 표의 매출과 같아요).';
+var named = !!(ctx.V && ctx.V.kpiLabels && ctx.V.kpiLabels.revenue);
+var rev = named ? ctx.V.kpiLabels.revenue + '(통장에 들어온 매출)' : '매출';
+var obX = named && M.adjusted && M.adjSum && months && months.length ? M.adjSum(ctx.f.store, months, ['d_revenue']) : null;
+var ob = obX && F.isNum(obX.value) && obX.value >= 0.5 ? ' 통장에 안 들어온 카드 정산(통장 밖)도 판 달 매출에 넣었어요.' : '';
+if (sel.id === 'op_margin') return '이익률 = 영업이익 ÷ ' + rev + '이에요.' + (M.adjusted ? (M.vat ? ' 영업이익은 부가세(그 달 몫)를 뺀 뒤예요.' : ' 영업이익은 세금 내기 전이에요.') : '') + ob;
+if (sel.id === 'revenue' && named) return ctx.V.kpiLabels.revenue + ' = 카드사·배달앱 등이 수수료를 떼고 통장에 넣어 준 매출이에요(손익 표의 매출과 같아요).' + ob;
 return '';
 }
 var BC_KPIS = ['revenue', 'op_profit', 'op_margin', 'food_ratio', 'labor_ratio'];
@@ -5131,11 +5237,15 @@ var idx = g.shown.map(function (m) { return months.indexOf(m); }).filter(functio
 var run = null;
 idx.forEach(function (i) { if (run && i === run.to + 1) run.to = i; else { run = { from: i, to: i, label: (f.store === 'all' ? ctx.storeName(g.store) + ' ' : '') + 'BC카드 입금 없음', short: 'BC 없음', fill: 'warn' }; spans.push(run); } });
 });
+var obOf = function (g) { var x = M.adjusted && M.adjSum ? M.adjSum(g.store, g.shown, ['d_revenue']) : null; return x && F.isNum(x.value) && x.value >= 0.5 && x.v ? x : null; };
+var obN = 0;
 var note = gaps.map(function (g) {
 var a = Number(g.from.slice(5)), b = Number(g.to.slice(5)), y = g.from.slice(0, 4) === g.to.slice(0, 4);
 var when = y ? (Number(g.from.slice(0, 4)) !== ref ? g.from.slice(0, 4) + '년 ' : '') + (a === b ? a + '월' : a + '~' + b + '월') : F.month(g.from, { refYear: ref }) + '~' + F.month(g.to, { refYear: ref });
-return U.esc(ctx.storeName(g.store)) + ' BC카드 입금이 ' + U.esc(when) + '에 한 번도 없어요' + (F.isNum(g.usual.value) ? ' — 평소 한 달 약 ' + ctx.num(g.usual, 'man') + '(앞 ' + g.usualN + '달 평균)' : '') + '.';
-}).join(' ') + ' 그래프의 주황 띠예요. 매출에 더하지 않았어요. 카드사에 확인해 보세요.';
+var ob = obOf(g); if (ob) obN++;
+return U.esc(ctx.storeName(g.store)) + ' BC카드 입금이 ' + U.esc(when) + '에 한 번도 없어요' + (F.isNum(g.usual.value) ? ' — 평소 한 달 약 ' + ctx.num(g.usual, 'man') + '(앞 ' + g.usualN + '달 평균)' : '') + '.' +
+(ob ? ' 그 달들 매출에는 통장 밖 매출 ' + ctx.num(ob, 'man') + '(통장에 안 들어온 판 달 몫)을 넣었어요.' : '');
+}).join(' ') + ' 그래프의 주황 띠예요.' + (!obN ? ' 매출에 더하지 않았어요. 카드사에 확인해 보세요.' : obN < gaps.length ? ' 통장 밖 매출이 없는 달은 매출에 더하지 않았어요.' : '');
 return { spans: spans, note: note };
 }
 function whyPanel(ctx) {
@@ -5150,7 +5260,7 @@ title: function () { return C.nav[2].label; },
 html: function (ctx) {
 var M = ctx.M, f = ctx.f, sel = kpiDef(ctx, ctx.route.params.get('k') || 'op_profit'), T = tableOf(ctx);
 var sub = U.esc(periodLabel(ctx)) + ' · ' + U.esc(ctx.storeName(f.store)) + ' · ' + U.esc(M.adjusted ? '월 맞춤 기준' : C.basisCash);
-var series = seriesOf(ctx, sel);
+var series = seriesOf(ctx, sel), smonths = series.filter(function (p) { return p.hasData; }).map(function (p) { return p.month; });
 var tableRows = series.map(function (p) { return [U.esc(F.month(p.month)), ctx.num({ value: p.value, v: p.v }, sel.kind === 'ratio' ? 'pct' : 'digits')]; });
 var selIdx = whole(ctx) ? -1 : T.months.indexOf(f.month);
 var chartTitle = f.multi ? sel.label + ', 고른 달마다' : sel.label + ', ' + yearOf(ctx) + '년 달마다';
@@ -5161,7 +5271,7 @@ return _.titleRow(C.nav[2].label, sub) + _.periodFilters(ctx) + selLine(ctx) + b
 '<div class="grid mt">' +
 '<section class="panel c12" role="tabpanel" id="pnl-chart-panel" data-keep="chart" aria-labelledby="tab-' + sel.id + '"><header><h2>' + U.esc(chartTitle) + '</h2><span class="meta">' + U.esc(ctx.storeName(f.store)) + '</span></header>' +
 _.chartBox('pnl-chart', 220, _.barLabels(ctx, series.map(function (p) { return p.hasData && F.isNum(p.value) ? { value: p.value, v: p.v } : null; }), sel.kind === 'ratio' ? 'pct0' : 'short')) +
-(bc && !(ctx.V && ctx.V.quietNotes) ? '<p class="note bc-note"><span class="bc-sw" aria-hidden="true"></span>' + bc.note + '</p>' : '') + (ratioNote(ctx, sel) ? '<p class="note">' + U.esc(ratioNote(ctx, sel)) + '</p>' : '') +
+(bc && !(ctx.V && ctx.V.quietNotes) ? '<p class="note bc-note"><span class="bc-sw" aria-hidden="true"></span>' + bc.note + '</p>' : '') + (ratioNote(ctx, sel, smonths) ? '<p class="note">' + U.esc(ratioNote(ctx, sel, smonths)) + '</p>' : '') +
 U.asTable(chartTitle, ['달', sel.kind === 'ratio' ? sel.label : sel.label + '(원)'], tableRows) + '</section>' +
 flowPanel(ctx) + mixPanel(ctx) + outsidePanel(ctx) +
 _.panel('c12 pnl-table-panel', tableTitle, (M.adjusted ? '월 맞춤' : '통장 기준') + ' · 원', yearTable(ctx, T, selIdx) + monthRows(ctx, T) +
@@ -5411,6 +5521,8 @@ function storeText(ctx, split) { return split === 'h' ? '반반' : split === 'a'
 function clsOf(r) { return r.cls === TX.LOAN_P_NAME ? r.cls : r.major + ' › ' + r.item + (r.detail ? ' · ' + r.detail : ''); }
 function won(ctx, v, tone) { return ctx.num({ value: v, v: 'ui:pop' }, 'digits', tone ? { tone: tone } : undefined); }
 function man(ctx, v, opts) { return ctx.num({ value: v, v: 'ui:pop' }, 'man', opts); }
+var OB_PILL = ' <span class="pill">통장 밖</span>';
+function dateOf(ctx, r) { return r.ob ? F.month(r.month, { refYear: refYear(ctx) }) + ' 몫' : F.date(r.date, { refYear: refYear(ctx) }); }
 function close() {
 if (!cur) return;
 var a = cur.anchor;
@@ -5486,14 +5598,18 @@ return U.esc(clsOf(r)) + ' · <span class="' + (r.inside ? 'pl-in' : 'pl-out') +
 }
 function renderList() {
 if (!listEl) return;
-var rows = TX.rows(st.contents, { store: store, line: st.line, q: st.q });
-var t = TX.total(rows);
+var rows = TX.rows(st.contents, { store: store, line: st.line, q: st.q, ob: !!(M.adjusted && st.line) });
+var obs = rows.filter(function (r) { return r.ob; });
+var t = TX.total(rows), tb = obs.length ? TX.total(rows.filter(function (r) { return !r.ob; })) : t, to = obs.length ? TX.total(obs) : null;
 var fl = st.line ? null : TX.flow(rows);
-var sum = '<p class="pop-sum"><b>' + F.count(t.count) + '</b> · ' + (fl ? '들어온 돈 ' + won(ctx, fl.inflow) + ' · 나간 돈 ' + won(ctx, fl.outflow) : '합계 ' + won(ctx, t.amount));
+var sum = '<p class="pop-sum"><b>' + F.count(t.count) + '</b> · ' + (fl ? '들어온 돈 ' + won(ctx, fl.inflow) + ' · 나간 돈 ' + won(ctx, fl.outflow) : '합계 ' + won(ctx, t.amount)) + (to ? ' (통장 ' + won(ctx, tb.amount) + ' + 통장 밖 ' + won(ctx, to.amount) + ')' : '');
 if (st.line && !st.q) {
 var cols = st.line === 'opex' ? ['opex', 'review'] : [st.line], pl = (M.sumOverBank || M.sumOver)(store, months, cols), adjV = M.adjusted ? M.sumOver(store, months, cols) : null;
-if (F.isNum(pl.value)) sum += Math.abs(pl.value - t.amount) <= 1 ? ' <span class="good">· ' + (M.adjusted ? '통장 기준 손익과 같아요' : '손익표와 같아요') + '</span>' : ' <span class="warn">· ' + (M.adjusted ? '통장 기준 손익 ' : '손익표 ') + won(ctx, pl.value) + '과 ' + won(ctx, t.amount - pl.value) + ' 달라요</span>';
-if (adjV && F.isNum(adjV.value) && Math.abs(adjV.value - pl.value) > 1) sum += '<br><span class="muted">손익표(월 맞춤)는 ' + won(ctx, adjV.value) + '이에요 — 그 달 몫으로 옮기거나 명세표·3개월 평균을 써서 통장과 달라요.</span>';
+if (F.isNum(pl.value)) sum += Math.abs(pl.value - tb.amount) <= 1 ? ' <span class="good">· ' + (M.adjusted ? '통장 기준 손익과 같아요' : '손익표와 같아요') + '</span>' : ' <span class="warn">· ' + (M.adjusted ? '통장 기준 손익 ' : '손익표 ') + won(ctx, pl.value) + '과 ' + won(ctx, tb.amount - pl.value) + ' 달라요</span>';
+if (adjV && F.isNum(adjV.value) && Math.abs(adjV.value - pl.value) > 1) {
+sum += to && Math.abs(adjV.value - pl.value - to.amount) <= 1 ? '<br><span class="muted">손익표(월 맞춤)는 ' + won(ctx, adjV.value) + '이에요 — 통장 ' + won(ctx, pl.value) + '원에 통장 밖 ' + won(ctx, to.amount) + '원(통장에 안 들어온 판 달 몫)을 더했어요.</span>'
+: '<br><span class="muted">손익표(월 맞춤)는 ' + won(ctx, adjV.value) + '이에요 — 그 달 몫으로 옮기거나 명세표·3개월 평균을 써서 통장과 달라요.</span>';
+} else if (to) sum += '<br><span class="muted">통장 밖 ' + won(ctx, to.amount) + '원은 통장에 안 찍힌 돈이에요' + (st.line === 'taxes' ? (M.vat ? ' — 지출의 밀린 부가세(낸 부가세)에 들어가요.' : ' — 지출의 밀린 세금 정리에 들어가요.') : '.') + '</span>';
 }
 sum += '</p>';
 var body;
@@ -5504,15 +5620,15 @@ body = '<ol class="tx-list">' + gs.slice(0, st.limit).map(function (g) {
 var keys = Object.keys(g.classes), stores = Object.keys(g.splits).map(function (s) { return storeText(ctx, s); }).join('·');
 var clsText = keys.length === 1 ? U.esc(keys[0]) : '<span class="warn">분류 ' + keys.length + '가지</span>: ' + keys.map(function (k) { return U.esc(k) + ' ' + g.classes[k] + '건'; }).join(' · ');
 var io = g.outside && g.inside ? ' · <span class="warn">손익 안·밖 섞임</span>' : g.outside ? ' · <span class="pl-out">손익 밖</span>' : '';
-return '<li class="tx-row"><div class="tx-main"><span class="tx-name">' + U.esc(g.name) + '</span><span class="tx-amt">' + won(ctx, g.amount) + '</span></div>' +
+return '<li class="tx-row"><div class="tx-main"><span class="tx-name">' + U.esc(g.name) + (g.ob ? OB_PILL : '') + '</span><span class="tx-amt">' + won(ctx, g.amount) + '</span></div>' +
 '<div class="tx-sub">' + F.count(g.count) + ' · ' + clsText + io + ' · ' + U.esc(stores) + '</div></li>';
 }).join('') + '</ol>' + (gs.length > st.limit ? '<button type="button" class="btn ghost pop-more" data-pt-more>' + (gs.length - st.limit) + '곳 더 보기</button>' : '');
 } else {
 var list = TX.sortRows(rows, st.sort);
 body = '<ol class="tx-list">' + list.slice(0, st.limit).map(function (r) {
 var opp = (r.amount < 0) ? ' <span class="pill warn">' + (r.raw > 0 ? '입금' : '출금') + '</span>' : '';
-return '<li class="tx-row"><div class="tx-main"><span class="tx-name">' + U.esc(r.name) + opp + '</span><span class="tx-amt">' + won(ctx, r.amount) + '</span></div>' +
-'<div class="tx-sub">' + U.esc(F.date(r.date, { refYear: refYear(ctx) })) + ' · ' + cls(ctx, r) + ' · ' + U.esc(storeText(ctx, r.split)) + '</div></li>';
+return '<li class="tx-row"><div class="tx-main"><span class="tx-name">' + U.esc(r.name) + (r.ob ? OB_PILL : opp) + '</span><span class="tx-amt">' + won(ctx, r.amount) + '</span></div>' +
+'<div class="tx-sub">' + U.esc(dateOf(ctx, r)) + ' · ' + cls(ctx, r) + ' · ' + U.esc(storeText(ctx, r.split)) + '</div></li>';
 }).join('') + '</ol>' + (list.length > st.limit ? '<button type="button" class="btn ghost pop-more" data-pt-more>' + (list.length - st.limit) + '건 더 보기</button>' : '');
 }
 listEl.innerHTML = sum + body;
@@ -5581,8 +5697,9 @@ var rev = M.sumOver(store, A, ['revenue']);
 p.body.innerHTML = '<ol class="tx-list">' + rows.map(function (x) {
 var v = M.sumOver(store, A, x[1]);
 if (!F.isNum(v.value) || !v.value) return '';
-return '<li class="tx-row"><button type="button" class="tx-main as-btn" data-pop-tx="' + x[0] + '"><span class="tx-name">' + U.esc(M.label(x[0])) + '</span><span class="tx-amt">' + won(ctx, v.value) + '</span></button>' +
-(x[0] !== 'revenue' && rev.value ? '<div class="tx-sub">매출의 ' + F.pct(v.value / rev.value) + '</div>' : '') + '</li>';
+var sub = x[0] !== 'revenue' && rev.value ? '<div class="tx-sub">매출의 ' + F.pct(v.value / rev.value) + (x[0] === 'vat' ? ' · 분기 납부서를 석 달에 나눈 몫(통장 거래 아님)' : '') + '</div>' : '';
+if (TX.LINES.indexOf(x[0]) < 0) return '<li class="tx-row"><div class="tx-main"><span class="tx-name">' + U.esc(M.label(x[0])) + '</span><span class="tx-amt">' + won(ctx, v.value) + '</span></div>' + sub + '</li>';
+return '<li class="tx-row"><button type="button" class="tx-main as-btn" data-pop-tx="' + x[0] + '"><span class="tx-name">' + U.esc(M.label(x[0])) + '</span><span class="tx-amt">' + won(ctx, v.value) + '</span></button>' + sub + '</li>';
 }).join('') + '</ol>';
 p.body.querySelectorAll('[data-pop-tx]').forEach(function (b) { b.addEventListener('click', function () { tx(ctx, b.getAttribute('data-pop-tx'), p.anchor, A); }); });
 }
@@ -5635,7 +5752,7 @@ else p.body.innerHTML = emptyNote('보여 줄 예시가 없어요.');
 } catch (e) { console.error(e); p.body.innerHTML = emptyNote('예시를 만들다 문제가 생겼어요.'); }
 return p;
 }
-function lineName(id) { if (id === 'supplier') return '거래처 외상(식재료)'; var t = C.flowLines && C.flowLines[id]; return t ? t.name : id; }
+function lineName(id) { if (id === 'supplier') return '거래처 외상(식재료)'; if (id === 'vat_diff') return '부가세'; var t = C.flowLines && C.flowLines[id]; return t ? t.name : id; }
 function flowOpts(ctx) { return { mergePersonal: !!(ctx.V && ctx.V.plainFlow) }; }
 function flow(ctx, line, anchor, months) {
 var M = ctx.M, store = ctx.f.store, admin = !!(ctx.V && ctx.V.details);
@@ -5666,11 +5783,18 @@ seg('pt-mode', admin ? [['group', '거래처별'], ['class', '분류별'], ['eac
 function keepOf(id) { return id === 'supplier' && M.foodBasisOf ? function (r) { return M.foodBasisOf(r.month, r.sup) === 'S'; } : null; }
 function sumLine(rows) {
 var out = TX.outTotal(rows), u = useOf(st.line), want = u ? u.x : null;
-var s = '<p class="pop-sum"><b>' + F.count(rows.length) + '</b> · 나간 돈 ' + won(ctx, out);
+var obs = rows.filter(function (r) { return r.ob; }), ob = obs.length ? TX.outTotal(obs) : null;
+var s = '<p class="pop-sum"><b>' + F.count(rows.length) + '</b> · 나간 돈 ' + won(ctx, out) + (ob != null ? ' (통장 ' + won(ctx, out - ob) + ' + 통장 밖 ' + won(ctx, ob) + ')' : '');
 if (st.q || !want || !F.isNum(want.value)) return s + '</p>';
 if (st.line === 'supplier') {
 var buy = out - want.value;
 return s + '</p><p class="pop-sum">그 기간 명세표 매입 ' + won(ctx, buy) + ' · 거래처에 낸 돈 ' + won(ctx, out) + ' → ' + (want.value >= 0 ? '명세표보다 더 낸 돈 ' : '아직 안 낸 돈 ') + won(ctx, Math.abs(want.value)) + '<br><span class="muted">명세표가 없는 달(통장 기준)의 지급은 빼고 셌어요.</span></p>';
+}
+if (st.line === 'vat_diff' && u.parts) {
+var pd = u.parts.paid, du = u.parts.due, es = u.parts.est;
+var same = pd && F.isNum(pd.value) ? (Math.abs(out - pd.value) <= 1 ? ' <span class="good">· 표의 낸 부가세와 같아요</span>' : ' <span class="warn">· 표의 낸 부가세와 ' + won(ctx, out - pd.value) + ' 달라요</span>') : '';
+return s + same + '</p><p class="pop-sum">그 기간 부가세 몫 ' + won(ctx, du && F.isNum(du.value) ? du.value : 0) + ' · 낸 부가세 ' + won(ctx, out) + ' → ' + (want.value >= 0 ? '이번 몫보다 더 낸 돈(밀린 부가세·가산세) ' : '아직 안 낸 이번 몫 ') + won(ctx, Math.abs(want.value)) +
+'<br><span class="muted">부가세 몫은 분기 납부서 금액을 석 달에 똑같이 나눈 것이에요 · 신고 전 달은 최근 1년 평균(추정)' + (es && F.isNum(es.value) && es.value >= 0.5 ? '으로 ' + won(ctx, es.value) : '') + '.</span></p>';
 }
 var extra = 0, note = '';
 if (st.line === 'other_out' && u.parts && F.isNum(u.parts.xfer.value) && u.parts.xfer.value) { extra = -u.parts.xfer.value; note = ' · 다른 가게와 나눈 몫 ' + won(ctx, extra) + '(거래 한 건으로는 안 보여요)'; }
@@ -5679,22 +5803,24 @@ return s + note + (Math.abs(tot - want.value) <= 1 ? ' <span class="good">· 표
 }
 function renderList() {
 if (!listEl) return;
-var rows = TX.rows(st.contents, { store: store, flow: st.line, q: st.q, keep: keepOf(st.line) });
+var rows = TX.rows(st.contents, { store: store, flow: st.line, q: st.q, keep: keepOf(st.line), ob: !!M.adjusted });
 var body;
 if (!rows.length) body = emptyNote(st.q ? '찾는 것이 없어요.' : '이 기간에는 거래가 없어요.');
 else if (st.mode === 'group' || st.mode === 'class') {
 var gs = st.mode === 'group' ? TX.groupByName(rows, st.sort) : TX.groupByClass(rows, st.sort);
 body = '<ol class="tx-list">' + gs.slice(0, st.limit).map(function (g) {
-var out = 0; rows.forEach(function (r) { if ((st.mode === 'group' ? r.name : r.what) === g.name) out += r.out; });
+var out = 0, obN = 0; rows.forEach(function (r) { if ((st.mode === 'group' ? r.name : r.what) === g.name) { out += r.out; if (r.ob) obN++; } });
 var sub = st.mode === 'group' ? Object.keys(g.classes).join(' · ') : '';
-return '<li class="tx-row"><div class="tx-main"><span class="tx-name">' + U.esc(g.name) + '</span><span class="tx-amt">' + won(ctx, out) + '</span></div>' +
-'<div class="tx-sub">' + F.count(g.count) + ' · ' + U.esc(F.date(g.first, { refYear: refYear(ctx) })) + (g.last !== g.first ? '~' + U.esc(F.date(g.last, { refYear: refYear(ctx) })) : '') + (sub ? ' · ' + U.esc(sub) : '') + '</div></li>';
+var when = obN === g.count ? (g.first.slice(0, 7) === g.last.slice(0, 7) ? dateOf(ctx, { ob: true, month: g.first.slice(0, 7) }) : F.month(g.first.slice(0, 7), { refYear: refYear(ctx) }) + '~' + F.month(g.last.slice(0, 7), { refYear: refYear(ctx) }) + ' 몫')
+: F.date(g.first, { refYear: refYear(ctx) }) + (g.last !== g.first ? '~' + F.date(g.last, { refYear: refYear(ctx) }) : '');
+return '<li class="tx-row"><div class="tx-main"><span class="tx-name">' + U.esc(g.name) + (obN ? OB_PILL : '') + '</span><span class="tx-amt">' + won(ctx, out) + '</span></div>' +
+'<div class="tx-sub">' + F.count(g.count) + ' · ' + U.esc(when) + (sub ? ' · ' + U.esc(sub) : '') + '</div></li>';
 }).join('') + '</ol>' + (gs.length > st.limit ? '<button type="button" class="btn ghost pop-more" data-pt-more>' + (gs.length - st.limit) + '가지 더 보기</button>' : '');
 } else {
 var list = TX.sortRows(rows, st.sort);
 body = '<ol class="tx-list">' + list.slice(0, st.limit).map(function (r) {
-return '<li class="tx-row"><div class="tx-main"><span class="tx-name">' + U.esc(r.name) + '</span><span class="tx-amt">' + won(ctx, r.out) + '</span></div>' +
-'<div class="tx-sub">' + U.esc(F.date(r.date, { refYear: refYear(ctx) })) + ' · ' + U.esc(r.what) + ' · ' + U.esc(storeText(ctx, r.split)) + '</div></li>';
+return '<li class="tx-row"><div class="tx-main"><span class="tx-name">' + U.esc(r.name) + (r.ob ? OB_PILL : '') + '</span><span class="tx-amt">' + won(ctx, r.out) + '</span></div>' +
+'<div class="tx-sub">' + U.esc(dateOf(ctx, r)) + ' · ' + U.esc(r.what) + ' · ' + U.esc(storeText(ctx, r.split)) + '</div></li>';
 }).join('') + '</ol>' + (list.length > st.limit ? '<button type="button" class="btn ghost pop-more" data-pt-more>' + (list.length - st.limit) + '건 더 보기</button>' : '');
 }
 listEl.innerHTML = sumLine(rows) + body;
@@ -5723,13 +5849,23 @@ p.body.addEventListener('change', function (e) { if (e.target.matches('[data-pt-
 });
 return p;
 }
-function flowKey(u) { return u.id === 'supplier' && F.isNum(u.x.value) && u.x.value < 0 ? 'supplier_less' : u.id; }
+function flowKey(u) {
+var less = F.isNum(u.x.value) && u.x.value < 0;
+return u.id === 'supplier' && less ? 'supplier_less' : u.id === 'vat_diff' ? (less ? 'vat_less' : 'vat_more') : u.id;
+}
 function barOf(u) { var t = C.flowLines && C.flowLines[flowKey(u)]; return t && t.bar ? t.bar : [lineName(u.id)]; }
 function useName(u) { var t = C.flowLines && C.flowLines[flowKey(u)]; return t ? t.name : lineName(u.id); }
 function popExtra(ctx, u) {
 if (!(ctx.V && ctx.V.details) || !u.parts) return '';
 var nz = function (x) { return x && F.isNum(x.value) && Math.abs(x.value) >= 0.5; };
 if (u.id === 'loan' && nz(u.parts.personal)) return '그중 ' + U.esc(lineName('loan_personal')) + ' ' + F.man(u.parts.personal.value);
+if (u.id === 'tax_arrears' && nz(u.parts.offbank)) return '그중 통장 밖 ' + F.man(u.parts.offbank.value);
+if (u.id === 'vat_diff') {
+var v = [];
+if (nz(u.parts.paid)) v.push('낸 부가세 ' + F.man(u.parts.paid.value) + (nz(u.parts.offbank) ? '(그중 통장 밖 ' + F.man(u.parts.offbank.value) + ')' : ''));
+if (nz(u.parts.due)) v.push('이번 몫 ' + F.man(u.parts.due.value) + (nz(u.parts.est) ? '(그중 추정 ' + F.man(u.parts.est.value) + ')' : ''));
+return v.join(' · ');
+}
 if (u.id === 'kiwoom') { var a = []; if (nz(u.parts.owner)) a.push('대표자 명의 ' + F.man(u.parts.owner.value)); if (nz(u.parts.family)) a.push('가족 명의 ' + F.man(u.parts.family.value)); return a.join(' · '); }
 return '';
 }
@@ -5743,11 +5879,11 @@ var uses = fl.uses.filter(function (u) { return F.isNum(u.x.value) && Math.abs(u
 var base = fl.earned.value > 0 ? fl.earned.value : null;
 var row = function (name, v, cls, sub) { return '<div class="row' + (cls ? ' ' + cls : '') + '"><div class="grow"><span class="title">' + name + '</span>' + (sub ? '<span class="line2">' + sub + '</span>' : '') + '</div><span class="amt">' + ctx.num({ value: v, v: 'ui:pop' }, 'digits', { sign: true }) + '</span></div>'; };
 var items = [{ lines: ['영업', '이익'], value: fl.earned.value, kind: 'earned', tip: '영업이익', text: F.short(fl.earned.value) }];
-var rows = row('영업이익', fl.earned.value, 'lead-row', fl.adjusted ? '세금 내기 전 · 손익 칸 영업이익과 같아요' : '통장 기준');
+var rows = row('영업이익', fl.earned.value, 'lead-row', fl.adjusted ? (fl.vat ? '부가세(그 달 몫) 뺀 뒤 · 손익 칸 영업이익과 같아요' : '세금 내기 전 · 손익 칸 영업이익과 같아요') : '통장 기준');
 uses.forEach(function (u) {
 var name = useName(u), v = -u.x.value;
 items.push({ lines: barOf(u), value: v, kind: v < 0 ? 'use' : 'adj', tip: name, text: F.short(v), select: canTx, line: u.id });
-rows += row(canTx ? '<button type="button" class="txline" data-pop-flow="' + u.id + '" aria-haspopup="dialog">' + U.esc(name) + '</button>' : U.esc(name), v, 'use', [base && u.x.value > 0 ? '이익의 ' + Math.round((u.x.value / base) * 100) + '%' : '', u.id === 'supplier' && u.x.value < 0 ? '통장에 남은 돈(외상)' : '', popExtra(ctx, u)].filter(Boolean).join(' · '));
+rows += row(canTx ? '<button type="button" class="txline" data-pop-flow="' + u.id + '" aria-haspopup="dialog">' + U.esc(name) + '</button>' : U.esc(name), v, 'use', [base && u.x.value > 0 ? '이익의 ' + Math.round((u.x.value / base) * 100) + '%' : '', u.id === 'supplier' && u.x.value < 0 ? '통장에 남은 돈(외상)' : '', u.id === 'vat_diff' && u.x.value < 0 ? '통장에 남은 돈(아직 안 낸 부가세)' : '', popExtra(ctx, u)].filter(Boolean).join(' · '));
 });
 items.push({ lines: ['잔액'], value: fl.left.value, kind: 'left', tip: '잔액', text: F.short(fl.left.value) });
 rows += row('잔액', fl.left.value, 'total', F.isNum(fl.left.value) && fl.left.value < 0 ? '이익보다 ' + F.man(-fl.left.value) + ' 더 썼어요' : '');
@@ -5907,6 +6043,7 @@ function daysIn(m) { return new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.sl
 function isNum(x) { return typeof x === 'number' && isFinite(x); }
 function cellNum(ctx, value, v) { return ctx.num({ value: value, v: v }, Math.abs(value) < 100000 ? 'digits' : 'short'); }
 function plain(ctx) { return !!(ctx.V && ctx.V.supPlain); }
+function estOn(ctx, id) { var se = ctx.V && ctx.V.supEst; return !plain(ctx) && !!se && se.indexOf(id) >= 0; }
 function dayBuy(r, base, pl) {
 var vals = [], vs = [];
 if (r.buy) { vals.push(r.buy); vs.push(base + 'buy'); }
@@ -6085,12 +6222,13 @@ function gapNote(ctx, s, ref) {
 var lo = s.month + '-01', hi = s.month + '-' + pad2(daysIn(s.month));
 var gs = ctx.M.supGaps(s.id).filter(function (g) { return g.to >= lo && nextDay(g.from) <= hi; });
 if (!gs.length) return '';
-return '<p class="note sup-gap-note">' + gs.map(function (g) {
-return '명세표 사진이 없는 날 ' + U.esc(F.dateShort(nextDay(g.from))) + '~' + U.esc(F.dateShort(g.to)) + ': 그 기간 청구 ' + ctx.num({ value: g.amount, v: 'supGaps[' + s.id + '/' + g.from + '].amount' }, 'man') + '은 ' + U.esc(F.date(g.to, { refYear: ref })) + '에 한 번에 넣었어요(그 전 날 잔액은 그만큼 낮게 보여요)';
-}).join(' · ') + (s.id === 'hyunjin' ? ' — ' + U.esc(NAME(ctx, s.id)) + ' 거래처원장을 받아 주시면 날마다 채울 수 있어요.' : '') + '</p>';
+var est = estOn(ctx, s.id);
+return '<p class="note sup-gap-note' + (est ? ' est' : '') + '">' + (est ? '<strong>사진으로 맞춤</strong> — ' : '') + gs.map(function (g) {
+return '명세표 사진이 없는 날 ' + U.esc(F.dateShort(nextDay(g.from))) + '~' + U.esc(F.dateShort(g.to)) + ': ' + (est ? '앞뒤 사진 잔액으로 맞춘 ' : '') + '그 기간 청구 ' + ctx.num({ value: g.amount, v: 'supGaps[' + s.id + '/' + g.from + '].amount' }, 'man') + '은 ' + U.esc(F.date(g.to, { refYear: ref })) + '에 한 번에 넣었어요(그 전 날 잔액은 그만큼 낮게 보여요)';
+}).join(' · ') + (est ? ' · 손익(식재료)에도 이 금액을 넣었어요.' : '') + (s.id === 'hyunjin' ? ' — ' + U.esc(NAME(ctx, s.id)) + ' 거래처원장을 받아 주시면 날마다 채울 수 있어요.' : '') + '</p>';
 }
 function calendar(ctx, s) {
-var m = s.month, n = daysIn(m), first = dow(m + '-01'), byDay = {}, gaps = ctx.M.supGaps(s.id), pl = plain(ctx);
+var m = s.month, n = daysIn(m), first = dow(m + '-01'), byDay = {}, gaps = ctx.M.supGaps(s.id), pl = plain(ctx), est = estOn(ctx, s.id);
 var inGap = function (date) { return gaps.some(function (g) { return date > g.from && date <= g.to; }); };
 s.mo.rows.forEach(function (r) { byDay[Number(r.date.slice(8, 10))] = r; });
 var cells = '';
@@ -6103,7 +6241,7 @@ var bx = dayBuy(r, base, pl);
 cells += '<button type="button" class="' + cls + '" data-sup-day="' + d + '" aria-pressed="' + (s.sel && s.sel.date === date) + '" aria-label="' + U.esc(F.date(date, { refYear: 0 })) + '">' +
 '<span class="cal-d">' + d + '</span>' +
 (bx ? '<span class="cal-buy">' + cellNum(ctx, bx.value, bx.v) + '</span>' : '') +
-(!pl && r.adj ? '<span class="cal-adj">+' + cellNum(ctx, r.adj, base + 'adj') + '</span>' : '') +
+(!pl && r.adj ? '<span class="cal-adj' + (est ? ' est' : '') + '">+' + cellNum(ctx, r.adj, base + 'adj') + '</span>' : '') +
 (!pl && r.fix ? '<span class="cal-fix">정정 ' + cellNum(ctx, r.fix, base + 'fix') + '</span>' : '') +
 (r.paid ? '<span class="cal-paid">입금 ' + cellNum(ctx, r.paid, base + 'paid') + '</span>' : '') + '</button>';
 }
@@ -6111,7 +6249,7 @@ var fixOn = !pl && s.mo.rows.some(function (r) { return isNum(r.fix) && r.fix; }
 return '<div class="cal" role="group" aria-label="' + U.esc(F.month(m, { refYear: 0 })) + ' 달력"' + (ctx.V && ctx.V.supSwipe ? ' data-swipe="month"' : '') + '>' +
 WEEK.map(function (w, i) { return '<span class="cal-w' + (i === 0 ? ' sun' : '') + '" aria-hidden="true">' + w + '</span>'; }).join('') + cells + '</div>' +
 '<p class="cal-legend"><span class="lg buy">숫자 = 그날 청구(명세표)</span><span class="lg paid">파란 칸 = 입금한 날</span>' +
-(!pl && gaps.some(function (g) { return g.to >= m + '-01' && g.from < m + '-' + pad2(n); }) ? '<span class="lg gap">빗금 = 명세표 사진이 없는 날(+금액 = 앞뒤 잔액으로 구간 몫을 한 번에 넣은 날)</span>' : '') +
+(!pl && gaps.some(function (g) { return g.to >= m + '-01' && g.from < m + '-' + pad2(n); }) ? (est ? '<span class="lg gap est">빗금 = 명세표 사진이 없는 날(초록 +금액 = 앞뒤 사진 잔액으로 맞춘 구간 몫 · 손익에도 넣었어요)</span>' : '<span class="lg gap">빗금 = 명세표 사진이 없는 날(+금액 = 앞뒤 잔액으로 구간 몫을 한 번에 넣은 날)</span>') : '') +
 (fixOn ? '<span class="lg fix">정정 = 장부 잔액을 명세표·통장에 맞춘 금액(매입 아니에요)</span>' : '') + '</p>';
 }
 function dayDetail(ctx, s, ref) {
@@ -6128,7 +6266,7 @@ var stmt = !pl && isNum(r.stmt) && isNum(r.bal) ? (r.stmt === r.bal ? '<span cla
 '<span class="warn">명세표 잔액 ' + ctx.num({ value: r.stmt, v: base + 'stmt' }, 'won') + ' — ' + (r.paid && Math.abs(r.stmt - r.bal - r.paid) < 1 ? '그날 입금이 명세표에 아직 안 찍혔어요(다음 장에서 맞아요)' : '차이 ' + ctx.num({ value: r.stmt - r.bal, v: base + 'stmt - ' + base + 'bal' }, 'won', { sign: true })) + '</span>') : '';
 var notes = [];
 if (!pl && r.src && SRC[r.src]) notes.push('청구 출처: ' + SRC[r.src]);
-if (!pl && r.flag && r.flag.indexOf('G') >= 0) notes.push('명세표 사진이 없는 기간이라 날마다 청구는 모르고, 앞뒤 잔액으로 구간 몫을 마지막 날에 한 번에 넣었어요');
+if (!pl && r.flag && r.flag.indexOf('G') >= 0) notes.push('명세표 사진이 없는 기간이라 날마다 청구는 모르고, 앞뒤 ' + (estOn(ctx, s.id) ? '사진 ' : '') + '잔액으로 구간 몫을 마지막 날에 한 번에 넣었어요' + (estOn(ctx, s.id) ? ' — 사진으로 맞춘 몫이라 손익(식재료)에도 넣었어요' : ''));
 if (!pl && isNum(r.fix) && r.fix) notes.push('정정은 장부 잔액을 명세표·통장에 맞춘 금액이에요(매입 아니에요)');
 if (r.flag && r.flag.indexOf('U') >= 0) notes.push('이 날 입금은 아직 통장 자료(' + (ctx.M.supMeta && ctx.M.supMeta.bank_last ? F.date(ctx.M.supMeta.bank_last, { refYear: ref }) : '') + '까지)에 없어 명세표에 적힌 것이에요 — 통장이 들어오면 맞춰 봐요');
 var lines = line(ctx.storeName('2ho') + ' 매입', 'b2') + line(ctx.storeName('eungam') + ' 매입', 'be') + (pl ? sumLine(s.id === 'nain' ? '공통 매입' : '매입(두 가게 함께)', ['bc', 'adj']) : line(s.id === 'nain' ? '공통 매입' : '매입(두 가게 함께)', 'bc')) +

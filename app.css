@@ -672,6 +672,7 @@ mark.hl data { color: inherit; }
 .sup-month .arrow { font-size: 18px; line-height: 1; }
 .sup-kpis { margin-bottom: var(--gap); }
 .sup-gap-note { margin: 0 0 var(--gap); padding: 10px 12px; border: 1px solid var(--notice-edge); border-radius: var(--radius-control); background: var(--pill-warning-bg); color: var(--pill-warning-ink); font-size: var(--fs-label); }
+.sup-gap-note.est { border-color: var(--positive); background: var(--pill-positive-bg); color: var(--pill-positive-ink); }
 .sup-kpis .kpi { cursor: default; }
 .sup-kpis .kpi .delta + .delta { margin-top: 0; }
 .col-stack { display: grid; gap: var(--gap); align-content: start; min-width: 0; }
@@ -688,6 +689,7 @@ button.cal-cell:hover { background: var(--raised); }
 .cal-d { font-size: var(--fs-small); color: var(--muted); line-height: 1.2; }
 .cal-buy { font-size: var(--fs-label); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cal-adj { font-size: var(--fs-small); color: var(--warning); white-space: nowrap; }
+.cal-adj.est { color: var(--positive); font-weight: 600; }
 .cal-fix { font-size: var(--fs-small); color: var(--muted); }
 .cal-paid { font-size: var(--fs-small); font-weight: 600; color: var(--hue); font-variant-numeric: tabular-nums; }
 .cal-cell.paid { border-color: var(--hue); background: var(--sel-col); }
@@ -695,6 +697,7 @@ button.cal-cell:hover { background: var(--raised); }
 .cal-cell[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: -2px; }
 .cal-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 0; font-size: var(--fs-small); color: var(--muted); }
 .cal-legend .lg.paid { color: var(--hue); }
+.cal-legend .lg.gap.est { color: var(--positive); }
 .sup-day .row.total { font-weight: 600; }
 .row.as-btn { width: 100%; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .row.as-btn + .row.as-btn { border-top: 1px solid var(--rule); }
